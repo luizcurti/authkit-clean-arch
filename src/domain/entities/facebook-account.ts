@@ -16,7 +16,7 @@ export class FacebookAccount {
   facebookId: string
 
   constructor (facebookData: FacebookData, accountData?: AccountData) {
-    this.id = accountData?.id
+    this.id = accountData?.id || undefined
     this.name = accountData?.name ?? facebookData.name
     this.email = facebookData.email
     this.facebookId = facebookData.facebookId

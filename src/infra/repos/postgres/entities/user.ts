@@ -19,4 +19,15 @@ export class PgUser {
 
   @Column({ name: 'iniciais', nullable: true })
   initials?: string
+
+  toPlain () {
+    return {
+      id: this.id,
+      name: this.name,
+      email: this.email,
+      facebookId: this.facebookId,
+      pictureUrl: this.pictureUrl,
+      initials: this.initials
+    }
+  }
 }

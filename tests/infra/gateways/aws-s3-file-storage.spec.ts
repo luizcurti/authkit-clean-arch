@@ -1,8 +1,7 @@
 import { AwsS3FileStorage } from '@/infra/gateways'
-import { config, S3 } from 'aws-sdk'
-import { mocked } from 'ts-jest/utils'
+import { S3Client } from '@aws-sdk/client-s3'
 
-jest.mock('aws-sdk')
+jest.mock('@aws-sdk/client-s3')
 
 describe('AwsS3FileStorage', () => {
   let sut: AwsS3FileStorage
@@ -10,6 +9,7 @@ describe('AwsS3FileStorage', () => {
   let secret: string
   let bucket: string
   let fileName: string
+  let mockS3Client: jest.Mocked<S3Client>
 
   beforeAll(() => {
     accessKey = 'any_access_key'
@@ -19,18 +19,22 @@ describe('AwsS3FileStorage', () => {
   })
 
   beforeEach(() => {
+    mockS3Client = {
+      send: jest.fn()
+    } as any
+    mock(S3Client).mockImplementation(() => mockS3Client)
     sut = new AwsS3FileStorage(accessKey, secret, bucket)
   })
 
   it('should config aws credentials on creation', () => {
     expect(sut).toBeDefined()
-    expect(config.update).toHaveBeenCalledWith({
+    expect(S3Client).toHaveBeenCalledWith({
       credentials: {
         accessKeyId: accessKey,
         secretAccessKey: secret
       }
     })
-    expect(config.update).toHaveBeenCalledTimes(1)
+    expect(S3Client).toHaveBeenCalledTimes(1)
   })
 
   describe('upload', () => {
@@ -42,13 +46,13 @@ describe('AwsS3FileStorage', () => {
       file = Buffer.from('any_buffer')
       putObjectPromiseSpy = jest.fn()
       putObjectSpy = jest.fn().mockImplementation(() => ({ promise: putObjectPromiseSpy }))
-      mocked(S3).mockImplementation(jest.fn().mockImplementation(() => ({
+      mock(S3).mockImplementation(jest.fn().mockImplementation(() => ({
         putObject: putObjectSpy
       })))
     })
 
     it('should call putObject with correct input', async () => {
-      await sut.upload({ file, fileName: fileName })
+      await sut.upload({ file, fileName })
 
       expect(putObjectSpy).toHaveBeenCalledWith({
         Bucket: bucket,
@@ -89,7 +93,7 @@ describe('AwsS3FileStorage', () => {
     beforeAll(() => {
       deleteObjectPromiseSpy = jest.fn()
       deleteObjectSpy = jest.fn().mockImplementation(() => ({ promise: deleteObjectPromiseSpy }))
-      mocked(S3).mockImplementation(jest.fn().mockImplementation(() => ({
+      mock(S3).mockImplementation(jest.fn().mockImplementation(() => ({
         deleteObject: deleteObjectSpy
       })))
     })

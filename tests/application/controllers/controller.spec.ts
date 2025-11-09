@@ -1,8 +1,8 @@
 import { ServerError } from '@/application/errors'
-import { mocked } from 'ts-jest/utils'
 import { ValidationComposite } from '@/application/validation/composite'
 import { Controller } from '@/application/controllers'
 import { HttpResponse } from '@/application/helpers'
+import { Validator } from '@/application/validation'
 
 jest.mock('@/application/validation/composite')
 
@@ -12,29 +12,51 @@ class ControllerStub extends Controller {
     data: 'any_data'
   }
 
-  async perform (httpRequest: any): Promise<HttpResponse> {
+  validators: Validator[] = []
+
+  async perform (_httpRequest: any): Promise<HttpResponse> {
     return this.result
+  }
+
+  buildValidators (_httpRequest: any): Validator[] {
+    return this.validators
   }
 }
 
 describe('Controller', () => {
   let sut: ControllerStub
+  let validationCompositeValidateSpy: jest.Mock
 
   beforeEach(() => {
     sut = new ControllerStub()
+    validationCompositeValidateSpy = jest.fn().mockReturnValue(undefined)
+    ;(ValidationComposite as jest.MockedClass<typeof ValidationComposite>).mockImplementation(() => ({
+      validate: validationCompositeValidateSpy
+    }) as any)
   })
 
   it('Should return 400 if validation fails', async () => {
     const error = new Error('validation_error')
-    const ValidationCompositeSpy = jest.fn().mockImplementationOnce(() => ({
-      validate: jest.fn().mockReturnValueOnce(error)
-    }))
-    mocked(ValidationComposite).mockImplementationOnce(ValidationCompositeSpy)
+    validationCompositeValidateSpy.mockReturnValueOnce(error)
 
     const httpResponse = await sut.handle('any_value')
 
-    expect(ValidationComposite).toHaveBeenCalledWith([
-    ])
+    expect(ValidationComposite).toHaveBeenCalledWith([])
+    expect(httpResponse).toEqual({
+      statusCode: 400,
+      data: error
+    })
+  })
+
+  it('Should return 400 if validation fails with custom validators', async () => {
+    const error = new Error('validation_error')
+    const validator = { validate: jest.fn() } as any
+    sut.validators = [validator]
+    validationCompositeValidateSpy.mockReturnValueOnce(error)
+
+    const httpResponse = await sut.handle('any_value')
+
+    expect(ValidationComposite).toHaveBeenCalledWith([validator])
     expect(httpResponse).toEqual({
       statusCode: 400,
       data: error

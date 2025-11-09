@@ -15,7 +15,8 @@ export class PgUserProfileRepository extends PgRepository implements SaveUserPic
 
   async load ({ id }: LoadInput): Promise<LoadOutput> {
     const pgUserRepo = this.getRepository(PgUser)
-    const pgUser = await pgUserRepo.findOne({ id: parseInt(id) })
-    if (pgUser !== undefined) return { name: pgUser.name ?? undefined }
+    const pgUser = await pgUserRepo.findOneBy({ id: parseInt(id) })
+    if (pgUser !== null && pgUser !== undefined) return { name: pgUser.name ?? undefined }
+    return undefined
   }
 }

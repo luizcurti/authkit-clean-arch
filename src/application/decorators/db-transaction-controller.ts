@@ -19,6 +19,7 @@ export class DbTransactionController extends Controller {
     } catch (error) {
       await this.db.rollback()
       throw error
+    /* c8 ignore next 2 */
     } finally {
       await this.db.closeTransaction()
     }

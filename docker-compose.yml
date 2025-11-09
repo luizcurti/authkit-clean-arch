@@ -1,26 +1,52 @@
-version: '3.5'
-
 services:
-    pgsql:
-        build: ./docker/postgresql
-        ports:
-            - '5432:5432'
-        environment:
-            PGPASSWORD: 'secret'
-            POSTGRES_DB: 'app_db'
-            POSTGRES_USER: 'postgres'
-            POSTGRES_PASSWORD: 'secret'
-        volumes:
-            - 'sailpostgresql:/var/lib/postgresql/data'
-        networks:
-            - sail
-        healthcheck:
-          test: ["CMD", "pg_isready", "-q", "-d", "app_db", "-U", "postgres"]
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: nodejs-tdd-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nodejs_tdd_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./dump.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - nodejs-tdd-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
-networks:
-    sail:
-        driver: bridge
+  # PgAdmin (Optional - Database Management UI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: nodejs-tdd-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@nodejs-tdd.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "8081:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - nodejs-tdd-network
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
-    sailpostgresql:
-        driver: local
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  nodejs-tdd-network:
+    driver: bridge

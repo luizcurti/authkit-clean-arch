@@ -1,7 +1,7 @@
 import { getMockReq, getMockRes } from '@jest-mock/express'
 import { RequestHandler, Request, Response, NextFunction } from 'express'
 import multer from 'multer'
-import { mocked } from 'ts-jest/utils'
+import { mock } from 'jest-mock-extended'
 import { ServerError } from '@/application/errors'
 import { adaptMulter } from '@/main/adapters'
 
@@ -25,7 +25,7 @@ describe('MulterAdapter', () => {
     singleSpy = jest.fn().mockImplementation(() => uploadSpy)
     multerSpy = jest.fn().mockImplementation(() => ({ single: singleSpy }))
     fakeMulter = multer as jest.Mocked<typeof multer>
-    mocked(fakeMulter).mockImplementation(multerSpy)
+    mock(fakeMulter).mockImplementation(multerSpy)
     res = getMockRes().res
     next = getMockRes().next
   })

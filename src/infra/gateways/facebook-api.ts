@@ -33,8 +33,8 @@ export class FacebookApi implements LoadFacebookUser {
     return this.getUserInfo(token)
       .then(({ id, name, email }) => ({
         facebookId: id,
-        name: name,
-        email: email
+        name,
+        email
       }))
       .catch(() => undefined)
   }

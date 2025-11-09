@@ -1,4 +1,4 @@
-import { UserProfile } from '@/domain/entities'
+import { UserProfile } from '@/domain/entities/user-profile'
 
 describe('UserProfile', () => {
   let sut: UserProfile
@@ -44,6 +44,16 @@ describe('UserProfile', () => {
       id: 'any_id',
       pictureUrl: undefined,
       initials: 'LO'
+    })
+  })
+
+  it('should create initials with first two letters when name has only one word', () => {
+    sut.setPicture({ name: 'lu' })
+
+    expect(sut).toEqual({
+      id: 'any_id',
+      pictureUrl: undefined,
+      initials: 'LU'
     })
   })
 

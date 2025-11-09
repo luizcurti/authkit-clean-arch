@@ -50,13 +50,13 @@ describe('DbTransactionController', () => {
   it('should call rollback and close transaction on failure', async () => {
     decoratee.perform.mockRejectedValueOnce(new Error('decoratee_error'))
 
-    await sut.perform({ any: 'any' }).catch(() => {
-      expect(db.commit).not.toHaveBeenCalled()
-      expect(db.rollback).toHaveBeenCalledWith()
-      expect(db.rollback).toHaveBeenCalledTimes(1)
-      expect(db.closeTransaction).toHaveBeenCalledWith()
-      expect(db.closeTransaction).toHaveBeenCalledTimes(1)
-    })
+    await sut.perform({ any: 'any' }).catch(() => {})
+
+    expect(db.commit).not.toHaveBeenCalled()
+    expect(db.rollback).toHaveBeenCalledWith()
+    expect(db.rollback).toHaveBeenCalledTimes(1)
+    expect(db.closeTransaction).toHaveBeenCalledWith()
+    expect(db.closeTransaction).toHaveBeenCalledTimes(1)
   })
 
   it('should return same result as decoratee on success', async () => {
@@ -72,5 +72,35 @@ describe('DbTransactionController', () => {
     const promise = sut.perform({ any: 'any' })
 
     await expect(promise).rejects.toThrow(error)
+  })
+
+  it('should handle the perform method correctly', async () => {
+    const httpResponse = await sut.handle({ any: 'any' })
+
+    expect(httpResponse).toEqual({ statusCode: 204, data: null })
+  })
+
+  it('should not implement buildValidators', () => {
+    const validators = sut.buildValidators({ any: 'any' })
+
+    expect(validators).toEqual([])
+  })
+
+  it('should always close transaction even after commit', async () => {
+    await sut.perform({ any: 'any' })
+
+    expect(db.closeTransaction).toHaveBeenCalledTimes(1)
+  })
+
+  it('should always close transaction even after rollback', async () => {
+    decoratee.perform.mockRejectedValueOnce(new Error('any_error'))
+
+    try {
+      await sut.perform({ any: 'any' })
+    } catch {
+      // error expected
+    }
+
+    expect(db.closeTransaction).toHaveBeenCalledTimes(1)
   })
 })

@@ -12,7 +12,8 @@ export class AllowedMimeTypes implements Validator {
   validate (): Error | undefined {
     let isValid = false
     if (this.isPng() || this.isJpg()) isValid = true
-    else if (!isValid) return new InvalidMimeTypeError(this.allowed)
+    if (!isValid) return new InvalidMimeTypeError(this.allowed)
+    return undefined
   }
 
   private isPng (): boolean {

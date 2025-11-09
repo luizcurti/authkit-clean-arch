@@ -17,6 +17,7 @@ export class PgUserAccountRepository extends PgRepository implements LoadUserAcc
         name: pgUser.name ?? undefined
       }
     }
+    return undefined
   }
 
   async saveWithFacebook ({ id, name, email, facebookId }: SaveInput): Promise<SaveOutput> {

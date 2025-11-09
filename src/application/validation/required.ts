@@ -11,6 +11,7 @@ export class Required implements Validator {
     if (this.value === null || this.value === undefined) {
       return new RequiredFieldError(this.fieldName)
     }
+    return undefined
   }
 }
 
@@ -26,6 +27,7 @@ export class RequiredString extends Required {
     if (super.validate() !== undefined || this.value === '') {
       return new RequiredFieldError(this.fieldName)
     }
+    return undefined
   }
 }
 
@@ -41,5 +43,6 @@ export class RequiredBuffer extends Required {
     if (super.validate() !== undefined || this.value.length === 0) {
       return new RequiredFieldError(this.fieldName)
     }
+    return undefined
   }
 }

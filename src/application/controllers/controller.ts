@@ -2,9 +2,9 @@ import { badRequest, HttpResponse, serverError } from '@/application/helpers'
 import { ValidationComposite, Validator } from '@/application/validation'
 
 export abstract class Controller {
-  abstract perform (httpRequest: any): Promise<HttpResponse>
+  abstract perform (_httpRequest: any): Promise<HttpResponse>
 
-  buildValidators (httpRequest: any): Validator[] {
+  buildValidators (_httpRequest: any): Validator[] {
     return []
   }
 

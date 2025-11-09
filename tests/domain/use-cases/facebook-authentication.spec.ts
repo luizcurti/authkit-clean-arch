@@ -1,14 +1,14 @@
 import { mock, MockProxy } from 'jest-mock-extended'
-import { mocked } from 'ts-jest/utils'
-
+import * as FacebookAccountModule from '@/domain/entities/facebook-account'
 import { AuthenticationError } from '@/domain/entities/errors'
 import { FacebookAuthentication } from '@/domain/use-cases'
 import { LoadFacebookUser, TokenGenerator } from '@/domain/contracts/gateways'
 import { LoadUserAccount, SaveFacebookAccount } from '@/domain/contracts/repositories'
-import { FacebookAccount, AccessToken } from '@/domain/entities'
+import { AccessToken } from '@/domain/entities'
 import { setupFacebookAuthentication } from '../../../src/domain/use-cases/facebook-authentication'
 
 jest.mock('@/domain/entities/facebook-account')
+const MockedFacebookAccount = FacebookAccountModule.FacebookAccount as unknown as jest.Mock
 
 describe('FacebookAuthentication', () => {
   let facebookApi: MockProxy<LoadFacebookUser>
@@ -63,7 +63,7 @@ describe('FacebookAuthentication', () => {
 
   it('Should call SaveFacebookAccount with FacebookAccount', async () => {
     const FacebookAccountStub = jest.fn().mockImplementation(() => ({ any: 'any' }))
-    mocked(FacebookAccount).mockImplementation(FacebookAccountStub)
+    MockedFacebookAccount.mockImplementation(FacebookAccountStub)
 
     await sut({ token })
 

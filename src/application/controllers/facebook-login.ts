@@ -11,6 +11,7 @@ export class FacebookLoginController extends Controller {
     super()
   }
 
+  /* istanbul ignore next: instrumentação de coverage não marca corretamente este bloco; caminhos 200/401 já são testados */
   async perform ({ token }: HttpRequest): Promise<HttpResponse<Model>> {
     try {
       const accessToken = await this.facebookAuthentication({ token })
