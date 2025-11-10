@@ -1,8 +1,9 @@
 import { Controller } from '@/application/controllers'
 import { HttpResponse, ok } from '@/application/helpers'
+import { HealthCheckResponse } from '@/application/dtos'
 
-export class HealthCheckController extends Controller {
-  async perform (): Promise<HttpResponse> {
+export class HealthCheckController extends Controller<void> {
+  async perform (): Promise<HttpResponse<HealthCheckResponse>> {
     return ok({
       status: 'ok',
       timestamp: new Date().toISOString(),

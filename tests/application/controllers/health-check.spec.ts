@@ -8,7 +8,7 @@ describe('HealthCheckController', () => {
   })
 
   it('should return 200 with health status', async () => {
-    const result = await sut.handle({})
+    const result = await sut.handle(undefined)
 
     expect(result.statusCode).toBe(200)
     expect(result.data).toEqual({

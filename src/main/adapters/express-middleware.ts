@@ -1,7 +1,7 @@
 import { RequestHandler } from 'express'
 import { Middleware } from '@/application/middlewares'
 
-type Adapter = (middleware: Middleware) => RequestHandler
+type Adapter = (middleware: Middleware<any>) => RequestHandler
 
 export const adaptExpressMiddleware: Adapter = middleware => async (req, res, next) => {
   const { statusCode, data } = await middleware.handle({ ...req.headers })
