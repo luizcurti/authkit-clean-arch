@@ -6,7 +6,7 @@ export const setupMiddlewares = (app: Express): void => {
   // CORS
   app.use(cors())
   
-  // Logging de requisições HTTP
+  // HTTP request logging
   app.use(httpLogger)
   
   // Body parser

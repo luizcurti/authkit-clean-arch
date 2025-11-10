@@ -13,16 +13,16 @@ export class AdvancedHealthCheckController extends Controller<void> {
 
   async perform (): Promise<HttpResponse<AdvancedHealthCheckResponse>> {
     try {
-      // Verificação de database
+      // Database verification
       const dbCheck = await this.checkDatabase()
       
-      // Verificação de memória
+      // Memory verification
       const memoryCheck = this.checkMemory()
       
-      // Sistema
+      // System info
       const systemInfo = this.getSystemInfo()
       
-      // Status geral
+      // Overall status
       const overallStatus = this.calculateOverallStatus(dbCheck.status, memoryCheck.status)
       
       const response: AdvancedHealthCheckResponse = {
@@ -38,32 +38,34 @@ export class AdvancedHealthCheckController extends Controller<void> {
         }
       }
 
-      // Log para monitoramento
+      // Log for monitoring
       if (overallStatus !== 'healthy') {
         log.warn('Health check warning', { status: overallStatus, checks: response.checks })
       }
       
       return ok(response)
-    } catch (error: any) {
-      log.error('Health check failed', { error: error.message, stack: error.stack })
-      return serverError(error)
+    } catch (error: unknown) {
+      const err = error as Error
+      log.error('Health check failed', { error: err.message, stack: err.stack })
+      return serverError(err)
     }
   }
 
   private async checkDatabase (): Promise<{ status: 'up' | 'down', responseTime?: number, error?: string }> {
     const start = Date.now()
     try {
-      // Tenta executar uma query simples para verificar conectividade
+      // Try to execute a simple query to check connectivity
       const repo = this.pgConnection.getRepository(Object)
       await repo.query('SELECT 1')
       return {
         status: 'up',
         responseTime: Date.now() - start
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as Error
       return {
         status: 'down',
-        error: error.message
+        error: err.message
       }
     }
   }

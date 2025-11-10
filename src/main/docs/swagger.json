@@ -1,0 +1,476 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Advanced TDD Clean Architecture API",
+    "description": "API REST desenvolvida com Clean Architecture, TDD e SOLID principles",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Support",
+      "email": "support@example.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080/api",
+      "description": "Servidor de desenvolvimento"
+    },
+    {
+      "url": "https://api.example.com/api",
+      "description": "Servidor de produção"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "Endpoints de autenticação"
+    },
+    {
+      "name": "User",
+      "description": "Endpoints de usuário"
+    },
+    {
+      "name": "Health",
+      "description": "Endpoints de health check"
+    }
+  ],
+  "paths": {
+    "/login/facebook": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Login com Facebook",
+        "description": "Autentica usuário usando token do Facebook OAuth",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FacebookLoginRequest"
+              },
+              "example": {
+                "token": "EAABwzLixnjYBO..."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login realizado com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacebookLoginResponse"
+                },
+                "example": {
+                  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Token inválido ou ausente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "ValidationError",
+                  "message": "The field token is required"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticação falhou",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/picture": {
+      "put": {
+        "tags": ["User"],
+        "summary": "Atualizar foto de perfil",
+        "description": "Upload de foto de perfil do usuário (PNG ou JPG, máx 5MB)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "picture": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Arquivo de imagem (PNG ou JPG)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Foto atualizada com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavePictureResponse"
+                },
+                "example": {
+                  "pictureUrl": "https://bucket.s3.amazonaws.com/user-123.jpg",
+                  "initials": "JD"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Arquivo inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "ValidationError",
+                  "message": "Invalid file type. Allowed: png, jpg"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Unauthorized"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Arquivo muito grande",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "ValidationError",
+                  "message": "File size exceeds 5MB limit"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["User"],
+        "summary": "Remover foto de perfil",
+        "description": "Remove a foto de perfil do usuário e exibe iniciais",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Foto removida com sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavePictureResponse"
+                },
+                "example": {
+                  "initials": "JD"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Não autenticado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check básico",
+        "description": "Verifica status básico da aplicação",
+        "responses": {
+          "200": {
+            "description": "Aplicação está rodando",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthCheckResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "timestamp": "2025-11-10T22:00:00.000Z",
+                  "uptime": 3600,
+                  "environment": "production",
+                  "version": "1.0.0",
+                  "memory": {
+                    "used": 45.23,
+                    "total": 128.5
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/detailed": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check detalhado",
+        "description": "Verifica status detalhado incluindo database, memória e sistema",
+        "responses": {
+          "200": {
+            "description": "Status detalhado da aplicação",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdvancedHealthCheckResponse"
+                },
+                "example": {
+                  "status": "healthy",
+                  "timestamp": "2025-11-10T22:00:00.000Z",
+                  "uptime": 3600,
+                  "environment": "production",
+                  "version": "1.0.0",
+                  "checks": {
+                    "database": {
+                      "status": "up",
+                      "responseTime": 15
+                    },
+                    "memory": {
+                      "status": "normal",
+                      "used": 45.23,
+                      "total": 128.5,
+                      "percentage": 35
+                    },
+                    "system": {
+                      "platform": "linux",
+                      "nodeVersion": "v20.10.0",
+                      "processId": 1234
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token obtido através do endpoint de login"
+      }
+    },
+    "schemas": {
+      "FacebookLoginRequest": {
+        "type": "object",
+        "required": ["token"],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Token de acesso do Facebook OAuth",
+            "example": "EAABwzLixnjYBO..."
+          }
+        }
+      },
+      "FacebookLoginResponse": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT token para autenticação na API",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          }
+        }
+      },
+      "SavePictureResponse": {
+        "type": "object",
+        "properties": {
+          "pictureUrl": {
+            "type": "string",
+            "description": "URL da foto no S3",
+            "example": "https://bucket.s3.amazonaws.com/user-123.jpg"
+          },
+          "initials": {
+            "type": "string",
+            "description": "Iniciais do usuário (quando não há foto)",
+            "example": "JD"
+          }
+        }
+      },
+      "HealthCheckResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok"],
+            "description": "Status da aplicação"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp do health check"
+          },
+          "uptime": {
+            "type": "number",
+            "description": "Tempo de uptime em segundos"
+          },
+          "environment": {
+            "type": "string",
+            "description": "Ambiente (development, production, etc)"
+          },
+          "version": {
+            "type": "string",
+            "description": "Versão da aplicação"
+          },
+          "memory": {
+            "type": "object",
+            "properties": {
+              "used": {
+                "type": "number",
+                "description": "Memória usada em MB"
+              },
+              "total": {
+                "type": "number",
+                "description": "Memória total em MB"
+              }
+            }
+          }
+        }
+      },
+      "AdvancedHealthCheckResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["healthy", "degraded", "unhealthy"],
+            "description": "Status geral da aplicação"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uptime": {
+            "type": "number"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "checks": {
+            "type": "object",
+            "properties": {
+              "database": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": ["up", "down"]
+                  },
+                  "responseTime": {
+                    "type": "number",
+                    "description": "Tempo de resposta em ms"
+                  },
+                  "error": {
+                    "type": "string",
+                    "description": "Mensagem de erro (se down)"
+                  }
+                }
+              },
+              "memory": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": ["normal", "warning", "critical"]
+                  },
+                  "used": {
+                    "type": "number"
+                  },
+                  "total": {
+                    "type": "number"
+                  },
+                  "percentage": {
+                    "type": "number"
+                  }
+                }
+              },
+              "system": {
+                "type": "object",
+                "properties": {
+                  "platform": {
+                    "type": "string"
+                  },
+                  "nodeVersion": {
+                    "type": "string"
+                  },
+                  "processId": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Nome do erro"
+          },
+          "message": {
+            "type": "string",
+            "description": "Mensagem de erro descritiva"
+          }
+        }
+      }
+    }
+  }
+}

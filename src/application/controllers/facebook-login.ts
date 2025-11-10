@@ -11,10 +11,10 @@ export class FacebookLoginController extends Controller<FacebookLoginRequest> {
     super()
   }
 
-  /* istanbul ignore next: instrumentação de coverage não marca corretamente este bloco; caminhos 200/401 já são testados */
+  /* istanbul ignore next: coverage instrumentation doesn't mark this block correctly; 200/401 paths are already tested */
   async perform ({ token }: FacebookLoginRequest): Promise<HttpResponse<Model>> {
     try {
-      const accessToken = await this.facebookAuthentication({ token })
+      const accessToken = await this.facebookAuthentication({ token: token! })
       return ok(accessToken)
     } catch {
       return unauthorized()

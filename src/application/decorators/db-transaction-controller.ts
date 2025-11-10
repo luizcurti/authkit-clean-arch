@@ -2,15 +2,15 @@ import { DbTransaction } from '@/application/contracts'
 import { Controller } from '@/application/controllers'
 import { HttpResponse } from '@/application/helpers'
 
-export class DbTransactionController extends Controller {
+export class DbTransactionController<T = unknown> extends Controller<T> {
   constructor (
-    private readonly decoratee: Controller,
+    private readonly decoratee: Controller<T>,
     private readonly db: DbTransaction
   ) {
     super()
   }
 
-  async perform (httpRequest: any): Promise<HttpResponse> {
+  async perform (httpRequest: T): Promise<HttpResponse> {
     await this.db.openTransaction()
     try {
       const httpResponse = await this.decoratee.perform(httpRequest)

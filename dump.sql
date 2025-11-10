@@ -1,13 +1,13 @@
-CREATE TABLE IF NOT EXISTS usuarios (
+CREATE TABLE IF NOT EXISTS users (
   "id" SERIAL,
-  "nome" TEXT,
+  "name" TEXT,
   "email" TEXT NOT NULL,
-  "senha" TEXT,
-  "id_facebook" TEXT NOT NULL,
-  "foto" TEXT,
-  "iniciais" TEXT,
+  "password" TEXT,
+  "facebook_id" TEXT NOT NULL,
+  "picture_url" TEXT,
+  "initials" TEXT,
 
   PRIMARY KEY ("id")
 );
 
-INSERT INTO usuarios (nome, email, senha, id_facebook) VALUES ('Loro', 'loro@mail.com', NULL, '123456789');
+INSERT INTO users (name, email, password, facebook_id) VALUES ('Loro', 'loro@mail.com', NULL, '123456789');

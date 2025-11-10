@@ -2,6 +2,7 @@ module.exports = {
   testTimeout: 10000,
   collectCoverageFrom: [
     '<rootDir>/src/**/*.ts',
+    '!<rootDir>/src/infra/logger/winston-logger.ts',
     '!<rootDir>/src/main/**',
     '!<rootDir>/src/**/index.ts',
     '!<rootDir>/src/main/config/**',

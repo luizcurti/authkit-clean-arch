@@ -1,72 +1,84 @@
 import { z } from 'zod'
 
-// Determina o ambiente antes da validação
-const currentEnv = process.env.NODE_ENV || 'development'
-const isProduction = currentEnv === 'production'
-const isTest = currentEnv === 'test'
+// Determine environment before validation
+const nodeEnv = process.env.NODE_ENV || 'development'
+const isProduction = nodeEnv === 'production'
+const isTest = nodeEnv === 'test'
+const isDevelopment = !isProduction && !isTest
 
 const envSchema = z.object({
-  // Database Configuration
+  PORT: z.coerce.number().default(8080),
   DB_HOST: z.string().default('localhost'),
   DB_PORT: z.coerce.number().default(5432),
   DB_USER: z.string().default('postgres'),
-  DB_PASSWORD: z.string().default('postgres'),
-  DB_DATABASE: z.string().default('nodejs_tdd_db'),
+  DB_PASSWORD: z.string().default('docker'),
+  DB_DATABASE: z.string().default('advanced_tdd_clean_arch'),
+  NODE_ENV: z.string().default('development'),
 
-  // Facebook API Configuration - OBRIGATÓRIAS em produção
-  FB_CLIENT_ID: isProduction 
-    ? z.string().min(1, 'FB_CLIENT_ID é obrigatório em produção')
-    : z.string().optional().default('test_fb_client_id'),
+  // Facebook API Configuration - REQUIRED in production
+  FB_CLIENT_ID: isProduction
+    ? z.string().min(1, 'FB_CLIENT_ID is required in production')
+    : z.string().default('test_fb_client_id'),
   FB_CLIENT_SECRET: isProduction
-    ? z.string().min(1, 'FB_CLIENT_SECRET é obrigatório em produção')
-    : z.string().optional().default('test_fb_client_secret'),
+    ? z.string().min(1, 'FB_CLIENT_SECRET is required in production')
+    : z.string().default('test_fb_client_secret'),
 
-  // JWT Configuration - OBRIGATÓRIA em produção
+  // JWT Configuration - REQUIRED in production
   JWT_SECRET: isProduction
-    ? z.string().min(32, 'JWT_SECRET deve ter no mínimo 32 caracteres em produção')
-    : z.string().default('development_jwt_secret_key_minimum_32_characters_required'),
+    ? z.string().min(32, 'JWT_SECRET must be at least 32 characters in production')
+    : z.string().default('test_secret_key_for_dev_and_tests_only_change_in_prod'),
 
-  // AWS S3 Configuration (opcional para features de upload)
-  S3_ACCESS_KEY_ID: z.string().optional().default(''),
-  S3_SECRET_ACCESS_KEY: z.string().optional().default(''),
-  S3_BUCKET: z.string().optional().default(''),
-
-  // Application Configuration
-  PORT: z.coerce.number().default(8080),
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development')
+  // AWS S3 Configuration - REQUIRED in production
+  S3_ACCESS_KEY_ID: isProduction
+    ? z.string().min(1, 'S3_ACCESS_KEY_ID is required in production')
+    : z.string().default('test_s3_access_key'),
+  S3_SECRET_ACCESS_KEY: isProduction
+    ? z.string().min(1, 'S3_SECRET_ACCESS_KEY is required in production')
+    : z.string().default('test_s3_secret_key'),
+  S3_BUCKET: isProduction
+    ? z.string().min(1, 'S3_BUCKET is required in production')
+    : z.string().default('test-bucket')
 })
 
-// Validação com tratamento de erro adequado
-let validatedEnv: z.infer<typeof envSchema>
+const rawEnv = {
+  PORT: process.env.PORT,
+  DB_HOST: process.env.DB_HOST,
+  DB_PORT: process.env.DB_PORT,
+  DB_USER: process.env.DB_USER,
+  DB_PASSWORD: process.env.DB_PASSWORD,
+  DB_DATABASE: process.env.DB_DATABASE,
+  NODE_ENV: process.env.NODE_ENV,
+  FB_CLIENT_ID: process.env.FB_CLIENT_ID,
+  FB_CLIENT_SECRET: process.env.FB_CLIENT_SECRET,
+  JWT_SECRET: process.env.JWT_SECRET,
+  S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID,
+  S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY,
+  S3_BUCKET: process.env.S3_BUCKET
+}
 
-try {
-  validatedEnv = envSchema.parse(process.env)
-  
-  // Avisos para ambiente de desenvolvimento
-  if (!isProduction && !isTest) {
-    const missingVars: string[] = []
-    if (!process.env.FB_CLIENT_ID) missingVars.push('FB_CLIENT_ID')
-    if (!process.env.FB_CLIENT_SECRET) missingVars.push('FB_CLIENT_SECRET')
-    if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) missingVars.push('JWT_SECRET')
-    
-    if (missingVars.length > 0) {
-      console.warn('⚠️  Aviso: Usando valores padrão para desenvolvimento:')
-      missingVars.forEach(v => console.warn(`  - ${v}`))
-      console.warn('   Em produção, essas variáveis são OBRIGATÓRIAS!\n')
+// Validation with proper error handling
+const result = envSchema.safeParse(rawEnv)
+
+if (!result.success) {
+  // Warnings for development environment
+  if (isDevelopment) {
+    const missingVars = result.error.errors.map(e => e.path.join('.')).join(', ')
+    if (missingVars) {
+      console.warn('⚠️  Warning: Some environment variables are using default values:')
+      console.warn(`   ${missingVars}`)
+      console.warn('')
+      console.warn('   This is OK for development/testing.')
+      console.warn('   In production, these variables are REQUIRED!\n')
     }
-  }
-} catch (error) {
-  if (error instanceof z.ZodError) {
-    console.error('❌ Erro de configuração - Variáveis de ambiente inválidas:')
-    error.errors.forEach((err) => {
-      console.error(`  - ${err.path.join('.')}: ${err.message}`)
-    })
-    console.error('\n💡 Verifique seu arquivo .env e certifique-se de configurar todas as variáveis obrigatórias.')
-    console.error('   Consulte o arquivo .env.example para referência.\n')
+  } else {
+    // Error in production
+    console.error('❌ Configuration error - Invalid environment variables:')
+    console.error(result.error.format())
     process.exit(1)
   }
-  throw error
 }
+
+const validatedEnv = result.success ? result.data : envSchema.parse({})
 
 export const env = {
   database: {

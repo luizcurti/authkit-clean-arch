@@ -2,11 +2,11 @@ import { Request, Response, NextFunction } from 'express'
 import { log } from '@/infra/logger'
 
 export const httpLogger = (req: Request, res: Response, next: NextFunction): void => {
-  const startTime = Date.now()
+  const start = Date.now()
   
-  // Captura quando a resposta é finalizada
+  // Capture when response is finalized
   res.on('finish', () => {
-    const duration = Date.now() - startTime
+    const duration = Date.now() - start
     const { method, originalUrl, ip } = req
     const { statusCode } = res
     
@@ -19,7 +19,7 @@ export const httpLogger = (req: Request, res: Response, next: NextFunction): voi
       userAgent: req.get('user-agent') || 'unknown'
     }
     
-    // Log baseado no status code
+    // Log based on status code
     if (statusCode >= 500) {
       log.error(`${method} ${originalUrl} - ${statusCode}`, logData)
     } else if (statusCode >= 400) {

@@ -9,7 +9,7 @@ export interface AuthResponse {
 
 // DTOs para Facebook Login
 export interface FacebookLoginRequest {
-  token?: any
+  token?: string | null
 }
 
 export interface FacebookLoginResponse {
@@ -69,7 +69,7 @@ export interface AdvancedHealthCheckResponse {
   }
 }
 
-// DTO genérico para erros
+// Generic error DTO
 export interface ErrorResponse {
   error: string
   message?: string

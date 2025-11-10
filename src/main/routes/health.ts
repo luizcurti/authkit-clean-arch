@@ -3,9 +3,9 @@ import { makeHealthCheckController, makeAdvancedHealthCheckController } from '@/
 import { Router } from 'express'
 
 export default (router: Router): void => {
-  // Health check básico (rápido)
+  // Basic health check (fast)
   router.get('/health', adaptExpressRoute(makeHealthCheckController()))
   
-  // Health check avançado com verificações detalhadas
+  // Advanced health check with detailed verification
   router.get('/health/detailed', adaptExpressRoute(makeAdvancedHealthCheckController()))
 }

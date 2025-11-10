@@ -3,7 +3,7 @@ import { Validator } from '@/application/validation/validator'
 
 export class Required implements Validator {
   constructor (
-    readonly value: any,
+    readonly value: unknown,
     readonly fieldName?: string
   ) {}
 
