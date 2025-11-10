@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Advanced TDD Clean Architecture API",
-    "description": "API REST desenvolvida com Clean Architecture, TDD e SOLID principles",
+    "description": "REST API built with Clean Architecture, TDD and SOLID principles",
     "version": "1.0.0",
     "contact": {
       "name": "API Support",
@@ -16,33 +16,33 @@
   "servers": [
     {
       "url": "http://localhost:8080/api",
-      "description": "Servidor de desenvolvimento"
+      "description": "Development server"
     },
     {
       "url": "https://api.example.com/api",
-      "description": "Servidor de produção"
+      "description": "Production server"
     }
   ],
   "tags": [
     {
       "name": "Authentication",
-      "description": "Endpoints de autenticação"
+      "description": "Authentication endpoints"
     },
     {
       "name": "User",
-      "description": "Endpoints de usuário"
+      "description": "User endpoints"
     },
     {
       "name": "Health",
-      "description": "Endpoints de health check"
+      "description": "Health check endpoints"
     }
   ],
   "paths": {
     "/login/facebook": {
       "post": {
         "tags": ["Authentication"],
-        "summary": "Login com Facebook",
-        "description": "Autentica usuário usando token do Facebook OAuth",
+  "summary": "Login with Facebook",
+  "description": "Authenticate user using Facebook OAuth token",
         "requestBody": {
           "required": true,
           "content": {
@@ -58,7 +58,7 @@
         },
         "responses": {
           "200": {
-            "description": "Login realizado com sucesso",
+            "description": "Login successfully executed",
             "content": {
               "application/json": {
                 "schema": {
@@ -71,7 +71,7 @@
             }
           },
           "400": {
-            "description": "Token inválido ou ausente",
+            "description": "Invalid or missing token",
             "content": {
               "application/json": {
                 "schema": {
@@ -85,7 +85,7 @@
             }
           },
           "401": {
-            "description": "Autenticação falhou",
+            "description": "Authentication failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -103,8 +103,8 @@
     "/users/picture": {
       "put": {
         "tags": ["User"],
-        "summary": "Atualizar foto de perfil",
-        "description": "Upload de foto de perfil do usuário (PNG ou JPG, máx 5MB)",
+  "summary": "Update profile picture",
+  "description": "Upload user's profile picture (PNG or JPG, max 5MB)",
         "security": [
           {
             "bearerAuth": []
@@ -120,7 +120,7 @@
                   "picture": {
                     "type": "string",
                     "format": "binary",
-                    "description": "Arquivo de imagem (PNG ou JPG)"
+                    "description": "Image file (PNG or JPG)"
                   }
                 }
               }
@@ -129,7 +129,7 @@
         },
         "responses": {
           "200": {
-            "description": "Foto atualizada com sucesso",
+            "description": "Picture updated successfully",
             "content": {
               "application/json": {
                 "schema": {
@@ -143,7 +143,7 @@
             }
           },
           "400": {
-            "description": "Arquivo inválido",
+            "description": "Invalid file",
             "content": {
               "application/json": {
                 "schema": {
@@ -157,7 +157,7 @@
             }
           },
           "401": {
-            "description": "Não autenticado",
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -170,7 +170,7 @@
             }
           },
           "413": {
-            "description": "Arquivo muito grande",
+            "description": "File too large",
             "content": {
               "application/json": {
                 "schema": {
@@ -187,8 +187,8 @@
       },
       "delete": {
         "tags": ["User"],
-        "summary": "Remover foto de perfil",
-        "description": "Remove a foto de perfil do usuário e exibe iniciais",
+  "summary": "Remove profile picture",
+  "description": "Removes user's profile picture and returns initials",
         "security": [
           {
             "bearerAuth": []
@@ -196,7 +196,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Foto removida com sucesso",
+            "description": "Picture removed successfully",
             "content": {
               "application/json": {
                 "schema": {
@@ -209,7 +209,7 @@
             }
           },
           "401": {
-            "description": "Não autenticado",
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -224,11 +224,11 @@
     "/health": {
       "get": {
         "tags": ["Health"],
-        "summary": "Health check básico",
-        "description": "Verifica status básico da aplicação",
+  "summary": "Basic health check",
+  "description": "Checks basic application status",
         "responses": {
           "200": {
-            "description": "Aplicação está rodando",
+            "description": "Application is running",
             "content": {
               "application/json": {
                 "schema": {
@@ -254,11 +254,11 @@
     "/health/detailed": {
       "get": {
         "tags": ["Health"],
-        "summary": "Health check detalhado",
-        "description": "Verifica status detalhado incluindo database, memória e sistema",
+  "summary": "Detailed health check",
+  "description": "Checks detailed status including database, memory and system",
         "responses": {
           "200": {
-            "description": "Status detalhado da aplicação",
+            "description": "Detailed application status",
             "content": {
               "application/json": {
                 "schema": {
@@ -301,7 +301,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "JWT token obtido através do endpoint de login"
+        "description": "JWT token obtained from login endpoint"
       }
     },
     "schemas": {
@@ -311,7 +311,7 @@
         "properties": {
           "token": {
             "type": "string",
-            "description": "Token de acesso do Facebook OAuth",
+            "description": "Facebook OAuth access token",
             "example": "EAABwzLixnjYBO..."
           }
         }
@@ -321,7 +321,7 @@
         "properties": {
           "accessToken": {
             "type": "string",
-            "description": "JWT token para autenticação na API",
+            "description": "JWT token for API authentication",
             "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
           }
         }
@@ -331,12 +331,12 @@
         "properties": {
           "pictureUrl": {
             "type": "string",
-            "description": "URL da foto no S3",
+            "description": "Picture URL in S3",
             "example": "https://bucket.s3.amazonaws.com/user-123.jpg"
           },
           "initials": {
             "type": "string",
-            "description": "Iniciais do usuário (quando não há foto)",
+            "description": "User initials (when there is no picture)",
             "example": "JD"
           }
         }
@@ -347,35 +347,35 @@
           "status": {
             "type": "string",
             "enum": ["ok"],
-            "description": "Status da aplicação"
+            "description": "Application status"
           },
           "timestamp": {
             "type": "string",
             "format": "date-time",
-            "description": "Timestamp do health check"
+            "description": "Health check timestamp"
           },
           "uptime": {
             "type": "number",
-            "description": "Tempo de uptime em segundos"
+            "description": "Uptime in seconds"
           },
           "environment": {
             "type": "string",
-            "description": "Ambiente (development, production, etc)"
+            "description": "Environment (development, production, etc)"
           },
           "version": {
             "type": "string",
-            "description": "Versão da aplicação"
+            "description": "Application version"
           },
           "memory": {
             "type": "object",
             "properties": {
               "used": {
                 "type": "number",
-                "description": "Memória usada em MB"
+                "description": "Memory used in MB"
               },
               "total": {
                 "type": "number",
-                "description": "Memória total em MB"
+                "description": "Total memory in MB"
               }
             }
           }
@@ -414,11 +414,11 @@
                   },
                   "responseTime": {
                     "type": "number",
-                    "description": "Tempo de resposta em ms"
+                    "description": "Response time in ms"
                   },
                   "error": {
                     "type": "string",
-                    "description": "Mensagem de erro (se down)"
+                    "description": "Error message (if down)"
                   }
                 }
               },
@@ -463,11 +463,11 @@
         "properties": {
           "error": {
             "type": "string",
-            "description": "Nome do erro"
+            "description": "Error name"
           },
           "message": {
             "type": "string",
-            "description": "Mensagem de erro descritiva"
+            "description": "Descriptive error message"
           }
         }
       }

@@ -19,7 +19,7 @@
     "test:fb-api": "npm run test:integration -- ./tests/external/facebook-api.test.ts",
     "test:s3": "npm run test:integration -- ./tests/external/aws-s3-file-storage.test.ts",
     "dev": "ts-node-dev --respawn --transpile-only -r dotenv/config --inspect=0.0.0.0:9229 src/main",
-    "typecheck": "tsc --noEmit",
+  "typecheck": "tsc --noEmit -p tsconfig-build.json",
     "prepare": "husky install",
     "check": "npm-check -s -u",
     "update": "ncu -u"
