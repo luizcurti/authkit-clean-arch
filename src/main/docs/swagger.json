@@ -387,7 +387,7 @@
           "status": {
             "type": "string",
             "enum": ["healthy", "degraded", "unhealthy"],
-            "description": "Status geral da aplicação"
+            "description": "Overall application status"
           },
           "timestamp": {
             "type": "string",

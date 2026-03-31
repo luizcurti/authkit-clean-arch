@@ -1,4 +1,4 @@
-// DTOs para Authentication
+// Authentication DTOs
 export interface AuthRequest {
   authorization: string
 }
@@ -7,7 +7,7 @@ export interface AuthResponse {
   userId: string
 }
 
-// DTOs para Facebook Login
+// Facebook Login DTOs
 export interface FacebookLoginRequest {
   token?: string | null
 }
@@ -16,7 +16,7 @@ export interface FacebookLoginResponse {
   accessToken: string
 }
 
-// DTOs para Save Picture
+// Save Picture DTOs
 export interface SavePictureRequest {
   file?: { buffer: Buffer, mimeType: string }
   userId: string
@@ -27,7 +27,7 @@ export interface SavePictureResponse {
   initials?: string
 }
 
-// DTOs para Health Check
+// Health Check DTOs
 export interface HealthCheckResponse {
   status: string
   timestamp: string
@@ -40,7 +40,7 @@ export interface HealthCheckResponse {
   }
 }
 
-// DTOs para Advanced Health Check
+// Advanced Health Check DTOs
 export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy'
 
 export interface AdvancedHealthCheckResponse {

@@ -8,7 +8,7 @@
 
 Production-grade REST API built with Clean Architecture, SOLID principles, rigorous TDD and TypeScript. Focused on high test coverage, clear separation of concerns, and maintainable evolution.
 
-> Current test coverage: ~96.9% (169 passing tests)
+> Current test suite: **188 unit tests + 28 E2E tests** — all passing. CI runs lint, unit, E2E, coverage and security checks on every push.
 
 ## 🔥 Highlights
 
@@ -18,6 +18,7 @@ Production-grade REST API built with Clean Architecture, SOLID principles, rigor
 - Detailed health check (database latency, memory, system info)
 - Strong environment validation with Zod (fails fast in production on missing secrets)
 - Structured logging (Winston + optional daily rotate)
+- E2E route tests with `pg-mem` (no real database required in CI)
 - Modular factories and adapters for easy extension
 - High coverage TDD with Jest + ts-jest
 
@@ -94,8 +95,11 @@ Swagger docs: `http://localhost:8080/api-docs`
 ## 🧪 Testing
 
 ```bash
-# Run all tests
+# Run all unit tests
 npm test
+
+# Run E2E route tests (uses pg-mem — no real DB needed)
+npm run test:e2e
 
 # Coverage report
 npm run test:coverage
@@ -109,6 +113,20 @@ npm run test:s3
 ```
 
 Coverage reports stored in `coverage/` (HTML + lcov). Aim to keep >90% line coverage.
+
+### CI Pipeline
+
+GitHub Actions runs 5 parallel jobs on every push:
+
+| Job | What it does |
+|-----|-------------|
+| `lint` | ESLint check |
+| `test` | Unit tests (Jest) |
+| `test-e2e` | E2E route tests with pg-mem |
+| `coverage` | Coverage upload to Codecov |
+| `security` | `npm audit` |
+
+`build` runs only after `lint`, `test` and `test-e2e` all pass.
 
 ## 🏗 Build & Run (Production)
 
