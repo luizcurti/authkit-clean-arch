@@ -23,7 +23,7 @@ describe('User Routes', () => {
   })
 
   afterAll(async () => {
-    await connection.disconnect()
+    if (connection !== undefined) await connection.disconnect()
   })
 
   beforeEach(() => {

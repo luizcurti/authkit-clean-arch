@@ -15,6 +15,5 @@ module.exports = {
   transform: {
     '\\.ts$': 'ts-jest'
   },
-  clearMocks: true,
-  runInBand: true
+  clearMocks: true
 }

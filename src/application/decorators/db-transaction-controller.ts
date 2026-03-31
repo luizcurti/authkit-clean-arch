@@ -13,7 +13,7 @@ export class DbTransactionController<T = unknown> extends Controller<T> {
   async perform (httpRequest: T): Promise<HttpResponse> {
     await this.db.openTransaction()
     try {
-      const httpResponse = await this.decoratee.perform(httpRequest)
+      const httpResponse = await this.decoratee.handle(httpRequest)
       await this.db.commit()
       return httpResponse
     } catch (error) {

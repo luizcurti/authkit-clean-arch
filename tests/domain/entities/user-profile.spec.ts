@@ -37,23 +37,23 @@ describe('UserProfile', () => {
     })
   })
 
-  it('should create initials with first two letter of first name', () => {
+  it('should create initials with first letter when name has only one word', () => {
     sut.setPicture({ name: 'lourivaldo' })
 
     expect(sut).toEqual({
       id: 'any_id',
       pictureUrl: undefined,
-      initials: 'LO'
+      initials: 'L'
     })
   })
 
-  it('should create initials with first two letters when name has only one word', () => {
+  it('should create initials with first letter when name has only one word (short)', () => {
     sut.setPicture({ name: 'lu' })
 
     expect(sut).toEqual({
       id: 'any_id',
       pictureUrl: undefined,
-      initials: 'LU'
+      initials: 'L'
     })
   })
 

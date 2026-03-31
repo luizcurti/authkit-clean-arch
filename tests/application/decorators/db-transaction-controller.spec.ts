@@ -12,7 +12,7 @@ describe('DbTransactionController', () => {
   beforeAll(() => {
     db = mock()
     decoratee = mock()
-    decoratee.perform.mockResolvedValue({ statusCode: 204, data: null })
+    decoratee.handle.mockResolvedValue({ statusCode: 204, data: null })
   })
 
   beforeEach(() => {
@@ -33,8 +33,8 @@ describe('DbTransactionController', () => {
   it('should execute decoratee', async () => {
     await sut.perform({ any: 'any' })
 
-    expect(decoratee.perform).toHaveBeenCalledWith({ any: 'any' })
-    expect(decoratee.perform).toHaveBeenCalledTimes(1)
+    expect(decoratee.handle).toHaveBeenCalledWith({ any: 'any' })
+    expect(decoratee.handle).toHaveBeenCalledTimes(1)
   })
 
   it('should call commit and close transaction on success', async () => {
@@ -48,7 +48,7 @@ describe('DbTransactionController', () => {
   })
 
   it('should call rollback and close transaction on failure', async () => {
-    decoratee.perform.mockRejectedValueOnce(new Error('decoratee_error'))
+    decoratee.handle.mockRejectedValueOnce(new Error('decoratee_error'))
 
     await sut.perform({ any: 'any' }).catch(() => {})
 
@@ -67,7 +67,7 @@ describe('DbTransactionController', () => {
 
   it('should rethrow if decoratee throws', async () => {
     const error = new Error('decoratee_error')
-    decoratee.perform.mockRejectedValueOnce(error)
+    decoratee.handle.mockRejectedValueOnce(error)
 
     const promise = sut.perform({ any: 'any' })
 
@@ -93,7 +93,7 @@ describe('DbTransactionController', () => {
   })
 
   it('should always close transaction even after rollback', async () => {
-    decoratee.perform.mockRejectedValueOnce(new Error('any_error'))
+    decoratee.handle.mockRejectedValueOnce(new Error('any_error'))
 
     try {
       await sut.perform({ any: 'any' })

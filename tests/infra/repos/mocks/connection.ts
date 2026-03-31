@@ -1,4 +1,4 @@
-import { newDb, IMemoryDb } from 'pg-mem'
+import { newDb, IMemoryDb, DataType } from 'pg-mem'
 import { PgConnection } from '@/infra/repos/postgres/helpers'
 
 export const makeFakeDb = async (entities?: any[]): Promise<IMemoryDb> => {
@@ -13,6 +13,14 @@ export const makeFakeDb = async (entities?: any[]): Promise<IMemoryDb> => {
     name: 'current_database',
     implementation: () => 'nodejs_tdd_db'
   })
+
+  // TypeORM 0.3 calls obj_description(regclass, text) during synchronize()
+  db.public.registerFunction({
+    name: 'obj_description',
+    args: [DataType.regclass, DataType.text],
+    returns: DataType.text,
+    implementation: () => null
+  })
   
   const dataSource = await db.adapters.createTypeormDataSource({
     type: 'postgres',
@@ -20,6 +28,11 @@ export const makeFakeDb = async (entities?: any[]): Promise<IMemoryDb> => {
   })
   await dataSource.initialize()
   await dataSource.synchronize()
-  await PgConnection.getInstance().connect()
+
+  // Inject the pg-mem DataSource into PgConnection singleton
+  // (PgConnection uses the legacy TypeORM 0.2 global API which pg-mem doesn't register with)
+  const pgConnection = PgConnection.getInstance();
+  (pgConnection as any).connection = dataSource
+
   return db
 }

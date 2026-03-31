@@ -1,5 +1,5 @@
 import { RequestHandler } from 'express'
-import multer from 'multer'
+import multer, { MulterError } from 'multer'
 import { ServerError } from '@/application/errors'
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024 // 5MB – same limit enforced by MaxFileSize validator
@@ -7,6 +7,9 @@ const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024 // 5MB – same limit enforced by Ma
 export const adaptMulter: RequestHandler = (req, res, next) => {
   const upload = multer({ limits: { fileSize: MAX_FILE_SIZE_BYTES } }).single('picture')
   return upload(req, res, (error) => {
+    if (error instanceof MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' })
+    }
     if (error !== undefined) {
       return res.status(500).json({ error: new ServerError(error).message })
     }

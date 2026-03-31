@@ -11,7 +11,7 @@ export class UserProfile {
       if (firstLetters.length > 1) {
         this.initials = `${firstLetters.shift()!}${firstLetters.pop()!}`.toLocaleUpperCase()
       } else {
-        this.initials = name.substring(0, 2).toLocaleUpperCase()
+        this.initials = firstLetters[0].toLocaleUpperCase()
       }
     }
   }

@@ -10,7 +10,11 @@ type LoadOutput = LoadUserProfile.Output
 export class PgUserProfileRepository extends PgRepository implements SaveUserPicture {
   async savePicture ({ id, pictureUrl, initials }: SaveInput): Promise<void> {
     const pgUserRepo = this.getRepository(PgUser)
-    await pgUserRepo.update({ id: parseInt(id) }, { pictureUrl, initials })
+    // Use null explicitly to clear fields in the database (undefined is ignored by TypeORM update)
+    await pgUserRepo.update({ id: parseInt(id) }, {
+      pictureUrl: (pictureUrl ?? null) as any,
+      initials: (initials ?? null) as any
+    })
   }
 
   async load ({ id }: LoadInput): Promise<LoadOutput> {
