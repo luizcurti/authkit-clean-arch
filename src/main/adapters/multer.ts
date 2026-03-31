@@ -18,7 +18,8 @@ export const adaptMulter: RequestHandler = (req, res, next) => {
         ...req.locals,
         file: { buffer: req.file.buffer, mimeType: req.file.mimetype }
       }
+      return next()
     }
-    return next()
+    return res.status(400).json({ error: 'The field file is required' })
   })
 }

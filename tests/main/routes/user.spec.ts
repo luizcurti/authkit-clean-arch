@@ -84,6 +84,25 @@ describe('User Routes', () => {
       expect(body.initials).toBeUndefined()
       expect(body.pictureUrl).toBeUndefined()
     })
+
+    it('should return 200 and clear pictureUrl when user already has a picture', async () => {
+      const { id } = await pgUserRepo.save({
+        email: 'haspic@email.com',
+        name: 'John Doe',
+        pictureUrl: 'https://any-bucket.s3.amazonaws.com/old-pic.jpg'
+      })
+      const authorization = sign({ key: id }, env.jwtSecret)
+
+      const { status, body } = await request(app)
+        .delete('/api/users/picture')
+        .set({ authorization })
+
+      expect(status).toBe(200)
+      expect(body.initials).toBe('JD')
+      expect(body.pictureUrl).toBeUndefined()
+      const updatedUser = await pgUserRepo.findOneBy({ id })
+      expect(updatedUser?.pictureUrl).toBeNull()
+    })
   })
 
   describe('PUT /users/picture', () => {
@@ -160,6 +179,18 @@ describe('User Routes', () => {
         .put('/api/users/picture')
         .set({ authorization })
         .attach('picture', bigBuffer, { filename: 'large.png', contentType: 'image/png' })
+
+      expect(status).toBe(400)
+      expect(body.error).toBeDefined()
+    })
+
+    it('should return 400 when no file is attached', async () => {
+      const { id } = await pgUserRepo.save({ email: 'nofile@email.com', name: 'Any Name' })
+      const authorization = sign({ key: id }, env.jwtSecret)
+
+      const { status, body } = await request(app)
+        .put('/api/users/picture')
+        .set({ authorization })
 
       expect(status).toBe(400)
       expect(body.error).toBeDefined()

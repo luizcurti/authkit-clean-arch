@@ -1,7 +1,6 @@
 import { getMockReq, getMockRes } from '@jest-mock/express'
 import { RequestHandler, Request, Response, NextFunction } from 'express'
 import multer from 'multer'
-import { mock } from 'jest-mock-extended'
 import { ServerError } from '@/application/errors'
 import { adaptMulter } from '@/main/adapters'
 
@@ -11,7 +10,6 @@ describe('MulterAdapter', () => {
   let uploadSpy: jest.Mock
   let singleSpy: jest.Mock
   let multerSpy: jest.Mock
-  let fakeMulter: jest.Mocked<typeof multer>
   let req: Request
   let res: Response
   let next: NextFunction
@@ -24,8 +22,7 @@ describe('MulterAdapter', () => {
     })
     singleSpy = jest.fn().mockImplementation(() => uploadSpy)
     multerSpy = jest.fn().mockImplementation(() => ({ single: singleSpy }))
-    fakeMulter = multer as jest.Mocked<typeof multer>
-    mock(fakeMulter).mockImplementation(multerSpy)
+    ;(multer as unknown as jest.Mock).mockImplementation(multerSpy)
     res = getMockRes().res
     next = getMockRes().next
   })
@@ -38,7 +35,7 @@ describe('MulterAdapter', () => {
   it('should call single upload with correct input', async () => {
     sut(req, res, next)
 
-    expect(multerSpy).toHaveBeenCalledWith()
+    expect(multerSpy).toHaveBeenCalledWith({ limits: { fileSize: 5 * 1024 * 1024 } })
     expect(multerSpy).toHaveBeenCalledTimes(1)
     expect(singleSpy).toHaveBeenCalledWith('picture')
     expect(singleSpy).toHaveBeenCalledTimes(1)
@@ -60,17 +57,19 @@ describe('MulterAdapter', () => {
     expect(res.json).toHaveBeenCalledTimes(1)
   })
 
-  it('should not add file to req.locals', async () => {
+  it('should return 400 when no file is attached', async () => {
     uploadSpy.mockImplementationOnce((req, res, next) => {
       next()
     })
 
     sut(req, res, next)
 
-    expect(req.locals).toEqual({ anyLocals: 'any_locals' })
+    expect(res.status).toHaveBeenCalledWith(400)
+    expect(res.json).toHaveBeenCalledWith({ error: 'The field file is required' })
+    expect(next).not.toHaveBeenCalled()
   })
 
-  it('should add file to req.locals', async () => {
+  it('should add file to req.locals and call next on success', async () => {
     sut(req, res, next)
 
     expect(req.locals).toEqual({
@@ -80,11 +79,6 @@ describe('MulterAdapter', () => {
         mimeType: req.file?.mimetype
       }
     })
-  })
-
-  it('should call nest on success', async () => {
-    sut(req, res, next)
-
     expect(next).toHaveBeenCalledWith()
     expect(next).toHaveBeenCalledTimes(1)
   })

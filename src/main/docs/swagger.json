@@ -143,42 +143,27 @@
             }
           },
           "400": {
-            "description": "Invalid file",
+            "description": "Bad request (invalid file type, file too large, or missing file)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "ValidationError",
-                  "message": "Invalid file type. Allowed: png, jpg"
+                  "error": "Invalid file type. Allowed: png, jpg"
                 }
               }
             }
           },
-          "401": {
-            "description": "Unauthorized",
+          "403": {
+            "description": "Forbidden — missing or invalid JWT token",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Unauthorized"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "File too large",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "ValidationError",
-                  "message": "File size exceeds 5MB limit"
+                  "error": "Forbidden"
                 }
               }
             }
@@ -208,12 +193,15 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized",
+          "403": {
+            "description": "Forbidden — missing or invalid JWT token",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Forbidden"
                 }
               }
             }
