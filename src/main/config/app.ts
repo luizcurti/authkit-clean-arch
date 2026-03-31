@@ -5,6 +5,9 @@ import { setupSwagger } from './swagger'
 
 const app = express()
 setupMiddlewares(app)
-setupRoutes(app)
 setupSwagger(app)
-export { app }
+
+// Routes are async; export a promise-based initializer for tests and for main entry
+const ready = setupRoutes(app)
+
+export { app, ready }

@@ -39,12 +39,10 @@ module.exports = {
     '/node_modules/',
     '/dist/',
     'aws-s3-file-storage.spec.ts',
-    'user.spec.ts',
     'multer.spec.ts',
     'connection.spec.ts',
     'user-account.spec.ts',
-    'infra/repos/user-profile.spec.ts',
-    'main/routes/login.spec.ts'
+    'infra/repos/user-profile.spec.ts'
   ],
   roots: [
     '<rootDir>/src',

@@ -4,9 +4,13 @@ import { PgConnection } from '@/infra/repos/postgres/helpers/connection'
 import { log } from '@/infra/logger'
 import { AdvancedHealthCheckResponse, HealthStatus } from '@/application/dtos'
 
+export interface DatabaseChecker {
+  runQuery: (sql: string) => Promise<unknown>
+}
+
 export class AdvancedHealthCheckController extends Controller<void> {
   constructor (
-    private readonly pgConnection: PgConnection = PgConnection.getInstance()
+    private readonly pgConnection: DatabaseChecker = PgConnection.getInstance()
   ) {
     super()
   }
@@ -54,9 +58,7 @@ export class AdvancedHealthCheckController extends Controller<void> {
   private async checkDatabase (): Promise<{ status: 'up' | 'down', responseTime?: number, error?: string }> {
     const start = Date.now()
     try {
-      // Try to execute a simple query to check connectivity
-      const repo = this.pgConnection.getRepository(Object)
-      await repo.query('SELECT 1')
+      await this.pgConnection.runQuery('SELECT 1')
       return {
         status: 'up',
         responseTime: Date.now() - start

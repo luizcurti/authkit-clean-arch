@@ -11,8 +11,8 @@ const envSchema = z.object({
   DB_HOST: z.string().default('localhost'),
   DB_PORT: z.coerce.number().default(5432),
   DB_USER: z.string().default('postgres'),
-  DB_PASSWORD: z.string().default('docker'),
-  DB_DATABASE: z.string().default('advanced_tdd_clean_arch'),
+  DB_PASSWORD: z.string().default('postgres'),
+  DB_DATABASE: z.string().default('nodejs_tdd_db'),
   NODE_ENV: z.string().default('development'),
 
   // Facebook API Configuration - REQUIRED in production

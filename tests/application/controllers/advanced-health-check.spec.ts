@@ -1,5 +1,4 @@
-import { AdvancedHealthCheckController } from '@/application/controllers/advanced-health-check'
-import { PgConnection } from '@/infra/repos/postgres/helpers/connection'
+import { AdvancedHealthCheckController, DatabaseChecker } from '@/application/controllers/advanced-health-check'
 import { log } from '@/infra/logger'
 
 jest.mock('@/infra/logger', () => ({
@@ -11,21 +10,18 @@ jest.mock('@/infra/logger', () => ({
 
 describe('AdvancedHealthCheckController', () => {
   let sut: AdvancedHealthCheckController
-  let pgConnection: jest.Mocked<PgConnection>
+  let dbChecker: jest.Mocked<DatabaseChecker>
 
   beforeEach(() => {
-    pgConnection = {
-      getRepository: jest.fn().mockReturnValue({
-        query: jest.fn()
-      })
-    } as any
-    sut = new AdvancedHealthCheckController(pgConnection)
+    dbChecker = {
+      runQuery: jest.fn().mockResolvedValue([{ '?column?': 1 }])
+    }
+    sut = new AdvancedHealthCheckController(dbChecker)
     jest.clearAllMocks()
   })
 
   it('should return 200 with healthy status when all checks pass', async () => {
-    const mockQuery = jest.fn().mockResolvedValue([{ '?column?': 1 }])
-    pgConnection.getRepository = jest.fn().mockReturnValue({ query: mockQuery })
+    dbChecker.runQuery.mockResolvedValue([{ '?column?': 1 }])
 
     const originalMemoryUsage = process.memoryUsage
     process.memoryUsage = jest.fn(() => ({
@@ -51,8 +47,7 @@ describe('AdvancedHealthCheckController', () => {
   })
 
   it('should return degraded status when memory usage is high', async () => {
-    const mockQuery = jest.fn().mockResolvedValue([{ '?column?': 1 }])
-    pgConnection.getRepository = jest.fn().mockReturnValue({ query: mockQuery })
+    dbChecker.runQuery.mockResolvedValue([{ '?column?': 1 }])
 
   // Mock memory to simulate high usage
     const originalMemoryUsage = process.memoryUsage
@@ -75,8 +70,7 @@ describe('AdvancedHealthCheckController', () => {
   })
 
   it('should return unhealthy status when database is down', async () => {
-    const mockQuery = jest.fn().mockRejectedValue(new Error('Connection refused'))
-    pgConnection.getRepository = jest.fn().mockReturnValue({ query: mockQuery })
+    dbChecker.runQuery.mockRejectedValue(new Error('Connection refused'))
 
     const result = await sut.perform()
 
@@ -88,8 +82,7 @@ describe('AdvancedHealthCheckController', () => {
   })
 
   it('should return degraded status when memory is critical', async () => {
-    const mockQuery = jest.fn().mockResolvedValue([{ '?column?': 1 }])
-    pgConnection.getRepository = jest.fn().mockReturnValue({ query: mockQuery })
+    dbChecker.runQuery.mockResolvedValue([{ '?column?': 1 }])
 
     const originalMemoryUsage = process.memoryUsage
     process.memoryUsage = jest.fn(() => ({
@@ -111,8 +104,7 @@ describe('AdvancedHealthCheckController', () => {
   })
 
   it('should handle database timeout gracefully', async () => {
-    const mockQuery = jest.fn().mockRejectedValue(new Error('Query timeout'))
-    pgConnection.getRepository = jest.fn().mockReturnValue({ query: mockQuery })
+    dbChecker.runQuery.mockRejectedValue(new Error('Query timeout'))
 
     const result = await sut.perform()
 
@@ -140,8 +132,7 @@ describe('AdvancedHealthCheckController', () => {
   })
 
   it('should use default values when NODE_ENV is not set', async () => {
-    const mockQuery = jest.fn().mockResolvedValue([{ '?column?': 1 }])
-    pgConnection.getRepository = jest.fn().mockReturnValue({ query: mockQuery })
+    dbChecker.runQuery.mockResolvedValue([{ '?column?': 1 }])
 
     const originalNodeEnv = process.env.NODE_ENV
     delete process.env.NODE_ENV
@@ -155,8 +146,7 @@ describe('AdvancedHealthCheckController', () => {
   })
 
   it('should use default values when npm_package_version is not set', async () => {
-    const mockQuery = jest.fn().mockResolvedValue([{ '?column?': 1 }])
-    pgConnection.getRepository = jest.fn().mockReturnValue({ query: mockQuery })
+    dbChecker.runQuery.mockResolvedValue([{ '?column?': 1 }])
 
     const originalVersion = process.env.npm_package_version
     delete process.env.npm_package_version

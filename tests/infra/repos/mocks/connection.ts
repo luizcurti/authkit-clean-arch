@@ -8,6 +8,11 @@ export const makeFakeDb = async (entities?: any[]): Promise<IMemoryDb> => {
     name: 'version',
     implementation: () => 'PostgreSQL 14.0 (pg-mem)'
   })
+
+  db.public.registerFunction({
+    name: 'current_database',
+    implementation: () => 'nodejs_tdd_db'
+  })
   
   const dataSource = await db.adapters.createTypeormDataSource({
     type: 'postgres',

@@ -7,7 +7,8 @@ import { log } from '@/infra/logger'
 
 PgConnection.getInstance().connect()
   .then(async () => {
-    const { app } = await import('@/main/config/app')
+    const { app, ready } = await import('@/main/config/app')
+    await ready
     app.listen(env.appPort, () => {
       log.info(`🚀 Server is running on port ${env.appPort}`)
       log.info(`📊 Environment: ${env.nodeEnv}`)

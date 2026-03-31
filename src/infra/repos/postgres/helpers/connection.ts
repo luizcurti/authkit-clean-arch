@@ -57,4 +57,9 @@ export class PgConnection implements DbTransaction {
     if (this.query !== undefined) return this.query.manager.getRepository(entity)
     return getRepository(entity)
   }
+
+  async runQuery (sql: string): Promise<unknown> {
+    if (this.connection === undefined) throw new ConnectionNotFoundError()
+    return this.connection.query(sql)
+  }
 }
