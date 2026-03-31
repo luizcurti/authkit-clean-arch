@@ -18,8 +18,9 @@
     "test:integration": "npm test -- -c ./jest.integration.config.js",
     "test:fb-api": "npm run test:integration -- ./tests/external/facebook-api.test.ts",
     "test:s3": "npm run test:integration -- ./tests/external/aws-s3-file-storage.test.ts",
+    "test:e2e": "jest --config jest.e2e.config.js --passWithNoTests --no-cache --runInBand",
     "dev": "ts-node-dev --respawn --transpile-only -r dotenv/config --inspect=0.0.0.0:9229 src/main",
-  "typecheck": "tsc --noEmit -p tsconfig-build.json",
+    "typecheck": "tsc --noEmit -p tsconfig-build.json",
     "prepare": "husky install",
     "check": "npm-check -s -u",
     "update": "ncu -u"
