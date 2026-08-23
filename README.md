@@ -8,7 +8,7 @@
 
 Production-grade REST API built with Clean Architecture, SOLID principles, rigorous TDD and TypeScript. Focused on high test coverage, clear separation of concerns, and maintainable evolution.
 
-> Current test suite: **188 unit tests + 28 E2E tests** — all passing. CI runs lint, unit, E2E, coverage and security checks on every push.
+> Current test suite: **229 unit tests + 31 E2E tests** — all passing, 100% line coverage on collected files. CI runs lint, typecheck, unit, E2E, coverage, security, Docker build and API collection checks on every push.
 
 ## 🔥 Highlights
 
@@ -38,7 +38,7 @@ src/
 - Infra: concrete adapters (PostgreSQL via TypeORM, Facebook API, AWS S3, logging).
 - Main: wiring, DI-style factories, server bootstrap, Express configuration.
 
-## � Tech Stack
+## 🧰 Tech Stack
 
 - Node.js >= 20
 - TypeScript 5.9
@@ -52,7 +52,7 @@ src/
 - Winston (logging)
 - Swagger UI Express (API docs)
 
-## � Key Directories
+## 📁 Key Directories
 
 | Path | Purpose |
 |------|---------|
@@ -60,15 +60,16 @@ src/
 | `src/application` | Controllers, middlewares, DTOs, validation builders |
 | `src/infra` | Gateways, repositories, external services implementations |
 | `src/main` | App entrypoint (`index.ts`), env config, factories, routes, Swagger |
-| `tests` | Unit & integration tests (mirrors structure) |
-| `scripts` | Maintenance / migration scripts |
+| `tests` | Unit, E2E and external integration tests (mirrors `src` structure) |
+| `scripts` | Maintenance scripts and the API collection test runner |
+| `docs` | Architecture/flow diagrams (Mermaid) and the Postman collection |
 
 ## 🚀 Getting Started
 
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd nodejs-tdd-clean-architecture
+cd nodejs-tdd-clean-arch
 
 # Install dependencies
 npm install
@@ -76,7 +77,7 @@ npm install
 # Copy environment template and adjust values
 cp .env.example .env
 
-# (Optional) Start PostgreSQL + PgAdmin via Docker
+# Start PostgreSQL (+ optional PgAdmin) via Docker
 docker compose up -d postgres pgadmin
 
 # Type check
@@ -92,10 +93,12 @@ npm run dev
 Access health check: `http://localhost:8080/api/health`  
 Swagger docs: `http://localhost:8080/api-docs`
 
+Prefer to run the whole stack (API + database) in containers? See [Docker Setup](#docker-setup).
+
 ## 🧪 Testing
 
 ```bash
-# Run all unit tests
+# Run all unit tests (includes repository tests against pg-mem, an in-memory Postgres)
 npm test
 
 # Run E2E route tests (uses pg-mem — no real DB needed)
@@ -107,26 +110,36 @@ npm run test:coverage
 # Watch mode
 npm run test:watch
 
-# Specific integration target (examples)
-npm run test:fb-api
-npm run test:s3
+# API collection checks against a running instance (see API Collection Tests below)
+npm run test:api
 ```
 
-Coverage reports stored in `coverage/` (HTML + lcov). Aim to keep >90% line coverage.
+Coverage reports stored in `coverage/` (HTML + lcov). Current line coverage is 100% on collected files (`jest.config.js` excludes the composition root — `src/main/**` — which is exercised by the E2E suite instead).
+
+### Live external integration tests (opt-in)
+
+`tests/external/*.test.ts` call the real Facebook Graph API and real AWS S3 — they need valid, non-expired credentials and are **not** part of the default CI pipeline (there's nothing to assert deterministically without live secrets). Run them locally with real credentials in `.env`:
+
+```bash
+npm run test:integration   # both external suites
+npm run test:fb-api        # Facebook Graph API only
+npm run test:s3            # AWS S3 only
+```
 
 ### CI Pipeline
 
-GitHub Actions runs 5 parallel jobs on every push:
+GitHub Actions runs on every push:
 
 | Job | What it does |
 |-----|-------------|
 | `lint` | ESLint check |
-| `test` | Unit tests (Jest) |
+| `typecheck` | `tsc --noEmit` |
+| `security` | `npm audit` (blocking) + Snyk scan (advisory) |
+| `test` | Unit tests (Jest), including repository tests against pg-mem |
+| `coverage` | Coverage run + Codecov upload + 90% line-coverage gate |
 | `test-e2e` | E2E route tests with pg-mem |
-| `coverage` | Coverage upload to Codecov |
-| `security` | `npm audit` |
-
-`build` runs only after `lint`, `test` and `test-e2e` all pass.
+| `docker` | Builds the app image, boots the real `docker compose` stack against real Postgres, and runs the API collection checks (`npm run test:api`) against it |
+| `build` | Compiles TypeScript, runs only after `lint`, `typecheck`, `test` and `test-e2e` pass |
 
 ## 🏗 Build & Run (Production)
 
@@ -146,7 +159,7 @@ Environment variables are validated at startup (see `src/main/config/env.ts`). M
 2. Calls `POST /api/login/facebook` with `{ token }`.
 3. API validates token with Facebook Graph API, creates/updates local account.
 4. Issues JWT (`accessToken`).
-5. Subsequent protected endpoints require `Authorization: Bearer <accessToken>`.
+5. Subsequent protected endpoints accept either `Authorization: Bearer <accessToken>` (standard scheme, also what Swagger UI sends) or the raw `Authorization: <accessToken>`.
 
 ## 📦 Profile Picture Handling
 
@@ -192,35 +205,58 @@ curl -X PUT http://localhost:8080/api/users/picture \
 curl http://localhost:8080/api/health
 ```
 
-## � Docker Setup
+## 📚 Diagrams
 
-Defined in `docker-compose.yml`:
+Architecture, request-flow (login, picture upload), deployment and database-schema diagrams live in [`docs/`](./docs) (Mermaid sources in `docs/mmd`, rendered PNGs in `docs/img`).
+
+## 📮 API Collection Tests
+
+A Postman collection covering success, validation-error, auth-failure and not-found scenarios lives in [`docs/api`](./docs/api) — import `collection.postman_collection.json` and `environment.postman_environment.json` into Postman/Insomnia. Generate a test JWT for the `accessToken` variable with:
+
+```bash
+node scripts/generate-test-token.js         # signs { key: '1' }, matching the user seeded by dump.sql
+```
+
+The same checks run without Postman/newman via a small dependency-free script (used in CI's `docker` job):
+
+```bash
+npm run test:api   # hits API_BASE_URL (default http://localhost:8080/api)
+```
+
+## 🐳 Docker Setup
+
+`docker-compose.yml` defines:
+- `app`: the API itself, built from the root `Dockerfile` (multi-stage: compile TypeScript, then a slim production-only runtime image)
 - `postgres`: PostgreSQL 15-alpine (initialized with `dump.sql`)
 - `pgadmin`: DB admin UI (optional)
 
 ```bash
-# Start services
-docker compose up -d postgres pgadmin
+# Build and start the full stack (API + database)
+docker compose up -d --build postgres app
+
+# Database admin UI (optional)
+docker compose up -d pgadmin
 
 # View logs
-docker compose logs -f postgres
+docker compose logs -f app
 
 # Stop
 docker compose down
 ```
 
-Database credentials & names are configured via `.env` (see `.env.example`).
+The `app` container reads its configuration from environment variables (see `docker-compose.yml`); when a root `.env` file exists, Docker Compose uses it to fill in those values, otherwise safe development defaults are used — the same defaults `src/main/config/env.ts` falls back to outside of production.
 
 ## 🔧 Environment Variables
 
-See `.env.example` for annotated list. Production requires:
+See `.env.example` for the annotated list. `.env` itself is gitignored — never commit real secrets. Production requires:
 - `FB_CLIENT_ID`, `FB_CLIENT_SECRET`
 - `JWT_SECRET` (>=32 chars)
 - `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET` (if S3 enabled)
+- `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_DATABASE`
 
-Default development fallbacks exist but aren’t safe for production.
+Default development fallbacks exist but aren't safe for production.
 
-## � Quality & Maintenance
+## 🛠 Quality & Maintenance
 
 ```bash
 # Lint
@@ -229,15 +265,17 @@ npm run lint
 # Lint with autofix
 npm run lint:fix
 
-# Dependency check/update suggestions
+# List outdated dependencies
 npm run check
+
+# Upgrade package.json to latest versions (review before installing)
 npm run update
 
 # Type-only check
 npm run typecheck
 ```
 
-Script `scripts/migrate.sh` helps clean/reinstall & rebuild in upgrade scenarios.
+`scripts/migrate.sh` does a clean `node_modules`/lockfile reinstall plus a typecheck + build, useful after a dependency bump. A `husky` pre-commit hook runs `lint-staged` (ESLint --fix + related Jest tests) on staged `.ts` files.
 
 ## 🪵 Logging
 
@@ -248,7 +286,6 @@ Script `scripts/migrate.sh` helps clean/reinstall & rebuild in upgrade scenarios
 ## 📈 Roadmap / Possible Enhancements
 - Add rate limiting & request tracing (e.g., pino-http or OpenTelemetry)
 - Add refresh token & token revocation strategy
-- Add containerized app service alongside DB (Docker) for one-command dev
 - Expand health check with disk & external API reachability
 - Add feature flags system (simple env-based or LaunchDarkly)
 - Introduce caching layer (Redis) for tokens/profile images metadata
@@ -260,7 +297,7 @@ Script `scripts/migrate.sh` helps clean/reinstall & rebuild in upgrade scenarios
 4. Submit PR with clear description & rationale
 
 ## 🛡 License
-MIT (see `LICENSE` if present). If missing, consider adding before distribution.
+[MIT](./LICENSE)
 
 ## 💬 Support
 For questions open an Issue or consult Swagger spec.

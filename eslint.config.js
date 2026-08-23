@@ -5,13 +5,14 @@ const typescriptEslint = require("@typescript-eslint/eslint-plugin");
 module.exports = [
     {
         ignores: [
-            "dist/**/*", 
-            "node_modules/**/*", 
+            "dist/**/*",
+            "node_modules/**/*",
             "coverage/**/*",
-            "*.js", 
+            "*.js",
             "eslint.config.js",
             "jest.config.js",
-            "ormconfig.js"
+            "ormconfig.js",
+            "scripts/**/*.js"
         ],
     },
     js.configs.recommended,
