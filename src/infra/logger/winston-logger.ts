@@ -36,7 +36,8 @@ const createTransports = (): winston.transport[] => {
   const transports: winston.transport[] = [
     new winston.transports.Console({
       format: consoleFormat,
-      level: env.isDevelopment ? 'debug' : 'info'
+      level: env.isDevelopment ? 'debug' : 'info',
+      silent: env.isTest
     })
   ]
 

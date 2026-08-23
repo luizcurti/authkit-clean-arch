@@ -11,7 +11,8 @@ export class AuthenticationMiddleware implements Middleware<AuthRequest> {
   async handle ({ authorization }: AuthRequest): Promise<HttpResponse<AuthResponse | Error>> {
     if (!this.validate({ authorization })) return forbidden()
     try {
-      const userId = await this.authorize({ token: authorization })
+      const token = this.extractToken(authorization)
+      const userId = await this.authorize({ token })
       return ok({ userId })
     } catch {
       return forbidden()
@@ -21,5 +22,9 @@ export class AuthenticationMiddleware implements Middleware<AuthRequest> {
   private validate ({ authorization }: AuthRequest): boolean {
     const error = new RequiredString(authorization, 'authorization').validate()
     return error === undefined
+  }
+
+  private extractToken (authorization: string): string {
+    return authorization.replace(/^Bearer\s+/i, '')
   }
 }

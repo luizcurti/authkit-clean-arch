@@ -10,7 +10,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,10 +27,58 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript compiler check
+        run: npm run typecheck
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+
+      - name: Run Snyk security scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
   test:
     name: Test
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:15-alpine
@@ -65,20 +113,20 @@ jobs:
           NODE_ENV: test
           DB_HOST: localhost
           DB_PORT: 5432
-          DB_USERNAME: postgres
+          DB_USER: postgres
           DB_PASSWORD: docker
           DB_DATABASE: advanced_tdd_clean_arch
           JWT_SECRET: test_secret_key_for_ci
           FB_CLIENT_ID: test_fb_client_id
           FB_CLIENT_SECRET: test_fb_client_secret
-          AWS_S3_ACCESS_KEY: test_aws_access_key
-          AWS_S3_SECRET: test_aws_secret
-          AWS_S3_BUCKET: test-bucket
+          S3_ACCESS_KEY_ID: test_aws_access_key
+          S3_SECRET_ACCESS_KEY: test_aws_secret
+          S3_BUCKET: test-bucket
 
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:15-alpine
@@ -113,15 +161,15 @@ jobs:
           NODE_ENV: test
           DB_HOST: localhost
           DB_PORT: 5432
-          DB_USERNAME: postgres
+          DB_USER: postgres
           DB_PASSWORD: docker
           DB_DATABASE: advanced_tdd_clean_arch
           JWT_SECRET: test_secret_key_for_ci
           FB_CLIENT_ID: test_fb_client_id
           FB_CLIENT_SECRET: test_fb_client_secret
-          AWS_S3_ACCESS_KEY: test_aws_access_key
-          AWS_S3_SECRET: test_aws_secret
-          AWS_S3_BUCKET: test-bucket
+          S3_ACCESS_KEY_ID: test_aws_access_key
+          S3_SECRET_ACCESS_KEY: test_aws_secret
+          S3_BUCKET: test-bucket
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -160,11 +208,55 @@ jobs:
       - name: Run E2E tests
         run: npm run test:e2e
 
+  docker:
+    name: Docker Build & API Collection Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app image and start stack
+        run: docker compose up -d --build postgres app
+
+      - name: Wait for app health check
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/health > /dev/null; then
+              echo "App is healthy"
+              exit 0
+            fi
+            echo "Waiting for app... ($i)"
+            sleep 2
+          done
+          echo "App did not become healthy in time"
+          exit 1
+
+      - name: Run API collection tests
+        run: npm run test:api
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose down -v
+
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test, test-e2e]
-    
+    needs: [lint, typecheck, test, test-e2e]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -188,32 +280,3 @@ jobs:
             exit 1
           fi
           echo "Build successful"
-
-  security:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run security audit
-        run: npm audit --audit-level=moderate
-        continue-on-error: true
-
-      - name: Run Snyk security scan
-        uses: snyk/actions/node@master
-        continue-on-error: true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          args: --severity-threshold=high

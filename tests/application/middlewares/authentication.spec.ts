@@ -49,6 +49,13 @@ describe('AuthenticationMiddleware', () => {
     expect(authorize).toHaveBeenCalledTimes(1)
   })
 
+  it('should strip the Bearer prefix before calling authorize', async () => {
+    await sut.handle({ authorization: `Bearer ${authorization}` })
+
+    expect(authorize).toHaveBeenCalledWith({ token: authorization })
+    expect(authorize).toHaveBeenCalledTimes(1)
+  })
+
   it('should return 403 if authorize throws', async () => {
     authorize.mockRejectedValueOnce(new Error('any_error'))
 

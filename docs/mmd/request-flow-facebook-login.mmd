@@ -1,0 +1,30 @@
+sequenceDiagram
+    actor Client
+    participant Route as POST /api/login/facebook
+    participant Controller as FacebookLoginController
+    participant UseCase as FacebookAuthentication
+    participant FbGateway as FacebookApi Gateway
+    participant Repo as PgUserAccountRepository
+    participant Jwt as JwtTokenHandler
+
+    Client->>Route: POST { token }
+    Route->>Controller: handle(request)
+    Controller->>Controller: validate(token required)
+    alt token missing
+        Controller-->>Client: 400 Validation Error
+    else token present
+        Controller->>UseCase: execute({ token })
+        UseCase->>FbGateway: loadUser({ token })
+        FbGateway-->>UseCase: FacebookAccount | undefined
+        alt invalid Facebook token
+            UseCase-->>Controller: throws AuthenticationError
+            Controller-->>Client: 401 Unauthorized
+        else valid Facebook token
+            UseCase->>Repo: load / save user by email
+            Repo-->>UseCase: user id
+            UseCase->>Jwt: generate({ key: userId })
+            Jwt-->>UseCase: accessToken
+            UseCase-->>Controller: { accessToken }
+            Controller-->>Client: 200 { accessToken }
+        end
+    end

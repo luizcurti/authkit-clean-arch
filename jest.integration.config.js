@@ -5,9 +5,7 @@ module.exports = {
     '@/tests/(.+)': '<rootDir>/tests/$1',
     '@/(.+)': '<rootDir>/src/$1'
   },
-  testMatch: [
-    '<rootDir>/tests/main/routes/**/*.spec.ts'
-  ],
+  testMatch: ['<rootDir>/tests/external/**/*.test.ts'],
   roots: [
     '<rootDir>/src',
     '<rootDir>/tests'
@@ -15,6 +13,5 @@ module.exports = {
   transform: {
     '\\.ts$': 'ts-jest'
   },
-  clearMocks: true,
-  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts']
+  clearMocks: true
 }

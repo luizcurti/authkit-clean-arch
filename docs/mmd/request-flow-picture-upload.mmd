@@ -1,0 +1,31 @@
+sequenceDiagram
+    actor Client
+    participant Route as PUT /api/users/picture
+    participant Auth as AuthenticationMiddleware
+    participant Multer as Multer upload adapter
+    participant Controller as SavePictureController
+    participant UseCase as ChangeProfilePicture
+    participant S3 as AwsS3FileStorage
+    participant Repo as PgUserProfileRepository
+
+    Client->>Route: PUT (Authorization: Bearer <jwt>, multipart picture)
+    Route->>Auth: handle({ authorization })
+    alt missing/invalid token
+        Auth-->>Client: 403 Access denied
+    else valid token
+        Auth->>Route: userId
+        Route->>Multer: parse multipart file
+        Route->>Controller: handle({ file, userId })
+        Controller->>Controller: validate(file required, mime type, max size)
+        alt validation fails
+            Controller-->>Client: 400 Validation Error
+        else file valid
+            Controller->>UseCase: execute({ userId, file })
+            UseCase->>S3: upload({ file, fileName })
+            S3-->>UseCase: pictureUrl
+            UseCase->>Repo: save({ userId, pictureUrl })
+            Repo-->>UseCase: ok
+            UseCase-->>Controller: { pictureUrl, initials }
+            Controller-->>Client: 200 { pictureUrl, initials }
+        end
+    end

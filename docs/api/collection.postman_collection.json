@@ -1,0 +1,213 @@
+{
+  "info": {
+    "name": "Advanced TDD Clean Architecture API",
+    "description": "Request examples for every endpoint, covering success, validation errors, and auth failures. Import together with environment.postman_environment.json.\n\nSet the `accessToken` environment variable to a JWT signed with the API's JWT_SECRET (e.g. `node scripts/generate-test-token.js`). The default environment assumes the database was seeded with dump.sql (user id=1, name \"Loro\").",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080/api" },
+    { "key": "accessToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Basic health check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('status is ok', () => pm.expect(pm.response.json().status).to.eql('ok'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detailed health check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health/detailed"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('database check is up', () => pm.expect(pm.response.json().checks.database.status).to.eql('up'))"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Login",
+      "item": [
+        {
+          "name": "Login with missing token (validation error)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{baseUrl}}/login/facebook"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400))"] }
+            }
+          ]
+        },
+        {
+          "name": "Login with invalid Facebook token (auth failure)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"token\": \"invalid_token\"}" },
+            "url": "{{baseUrl}}/login/facebook"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('status is 401', () => pm.response.to.have.status(401))"] }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "User Picture",
+      "item": [
+        {
+          "name": "Delete picture without auth header (auth failure)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/picture"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('status is 403', () => pm.response.to.have.status(403))"] }
+            }
+          ]
+        },
+        {
+          "name": "Delete picture with valid token (success)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/users/picture"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('returns initials', () => pm.expect(pm.response.json()).to.have.property('initials'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload picture without auth header (auth failure)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('status is 403', () => pm.response.to.have.status(403))"] }
+            }
+          ]
+        },
+        {
+          "name": "Upload picture with no file (validation error)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/users/picture"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400))"] }
+            }
+          ]
+        },
+        {
+          "name": "Upload picture with unsupported mime type (validation error)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "picture", "type": "file", "src": "", "contentType": "image/gif" }
+              ]
+            },
+            "url": "{{baseUrl}}/users/picture",
+            "description": "Select any .gif file to reproduce the 400 InvalidMimeType response."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400))"] }
+            }
+          ]
+        },
+        {
+          "name": "Upload picture with valid PNG (success, requires real S3 credentials)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "picture", "type": "file", "src": "", "contentType": "image/png" }
+              ]
+            },
+            "url": "{{baseUrl}}/users/picture",
+            "description": "Select a .png/.jpg file under 5MB. Only succeeds when the server is configured with real AWS S3 credentials (S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY/S3_BUCKET)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200))"] }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Not found",
+      "item": [
+        {
+          "name": "Unknown route",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/this-route-does-not-exist"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('status is 404', () => pm.response.to.have.status(404))"] }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

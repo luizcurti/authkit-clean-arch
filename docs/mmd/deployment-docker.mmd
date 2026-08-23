@@ -1,0 +1,22 @@
+flowchart LR
+    subgraph Host["Docker host"]
+        subgraph Network["nodejs-tdd-network (bridge)"]
+            App["app container\nnode:20-alpine\nport 8080"]
+            Postgres["postgres container\npostgres:15-alpine\nport 5432"]
+            PgAdmin["pgadmin container\noptional, port 8081"]
+        end
+        Volume[(postgres_data volume)]
+        PgVolume[(pgadmin_data volume)]
+    end
+
+    Client[HTTP Client / Browser] -- "8080:8080" --> App
+    Admin[DBA] -- "8081:80" --> PgAdmin
+    App -- "SQL over 5432" --> Postgres
+    PgAdmin -- "SQL over 5432" --> Postgres
+    Postgres --> Volume
+    PgAdmin --> PgVolume
+
+    FB[Facebook Graph API]
+    S3[(AWS S3)]
+    App -. HTTPS .-> FB
+    App -. HTTPS .-> S3

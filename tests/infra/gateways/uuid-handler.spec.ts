@@ -3,11 +3,13 @@ import { UUIDHandler } from '@/infra/gateways'
 
 jest.mock('uuid')
 
+const v4Mock = v4 as jest.MockedFunction<() => string>
+
 describe('UUIDHandler', () => {
   let sut: UUIDHandler
 
   beforeAll(() => {
-    jest.mocked(v4).mockReturnValue('any_uuid')
+    v4Mock.mockReturnValue('any_uuid')
   })
 
   beforeEach(() => {

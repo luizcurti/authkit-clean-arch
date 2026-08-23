@@ -4,9 +4,9 @@ import { PgConnection, ConnectionNotFoundError, TransactionNotFoundError } from 
 import { PgUser } from '@/infra/repos/postgres/entities'
 
 jest.mock('typeorm', () => ({
-  Entity: jest.fn(),
-  PrimaryGeneratedColumn: jest.fn(),
-  Column: jest.fn(),
+  Entity: jest.fn(() => () => {}),
+  PrimaryGeneratedColumn: jest.fn(() => () => {}),
+  Column: jest.fn(() => () => {}),
   createConnection: jest.fn(),
   getConnection: jest.fn(),
   getConnectionManager: jest.fn(),
@@ -32,7 +32,7 @@ describe('PgConnection', () => {
     getConnectionManagerSpy = jest.fn().mockReturnValue({
       has: hasSpy
     })
-    mock(getConnectionManager).mockImplementation(getConnectionManagerSpy)
+    jest.mocked(getConnectionManager).mockImplementation(getConnectionManagerSpy)
     startTransactionSpy = jest.fn()
     commitTransactionSpy = jest.fn()
     rollbackTransactionSpy = jest.fn()
@@ -48,16 +48,18 @@ describe('PgConnection', () => {
       }
     })
     createConnectionSpy = jest.fn().mockResolvedValue({
-      createQueryRunner: createQueryRunnerSpy
+      createQueryRunner: createQueryRunnerSpy,
+      getRepository: getRepositorySpy
     })
-    mock(createConnection).mockImplementation(createConnectionSpy)
+    jest.mocked(createConnection).mockImplementation(createConnectionSpy)
     closeSpy = jest.fn()
     getConnectionSpy = jest.fn().mockReturnValue({
       createQueryRunner: createQueryRunnerSpy,
+      getRepository: getRepositorySpy,
       close: closeSpy
     })
-    mock(getConnection).mockImplementation(getConnectionSpy)
-    mock(getRepository).mockImplementation(getRepositorySpy)
+    jest.mocked(getConnection).mockImplementation(getConnectionSpy)
+    jest.mocked(getRepository).mockImplementation(getRepositorySpy)
   })
 
   beforeEach(() => {

@@ -85,6 +85,18 @@ describe('User Routes', () => {
       expect(body.pictureUrl).toBeUndefined()
     })
 
+    it('should return 200 when authorization header uses the "Bearer <token>" scheme', async () => {
+      const { id } = await pgUserRepo.save({ email: 'bearer@email.com', name: 'Bearer User' })
+      const token = sign({ key: id }, env.jwtSecret)
+
+      const { status, body } = await request(app)
+        .delete('/api/users/picture')
+        .set({ authorization: `Bearer ${token}` })
+
+      expect(status).toBe(200)
+      expect(body.initials).toBe('BU')
+    })
+
     it('should return 200 and clear pictureUrl when user already has a picture', async () => {
       const { id } = await pgUserRepo.save({
         email: 'haspic@email.com',

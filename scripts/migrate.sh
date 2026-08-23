@@ -1,39 +1,39 @@
 #!/bin/bash
 
-echo "🚀 Iniciando migração para versão modernizada..."
+echo "🚀 Starting clean reinstall..."
 
-# Backup do package-lock.json se existir
+# Backup package-lock.json if it exists
 if [ -f "package-lock.json" ]; then
-    echo "📦 Fazendo backup do package-lock.json..."
+    echo "📦 Backing up package-lock.json..."
     cp package-lock.json package-lock.json.backup
 fi
 
-# Limpar node_modules e reinstalar
-echo "🧹 Limpando node_modules..."
+# Clean node_modules and reinstall
+echo "🧹 Cleaning node_modules..."
 rm -rf node_modules
 rm -f package-lock.json
 
-echo "📦 Reinstalando dependências modernizadas..."
+echo "📦 Reinstalling dependencies..."
 npm install
 
-# Verificar se há erros de compilação
-echo "🔍 Verificando compilação TypeScript..."
+# Check for TypeScript compilation errors
+echo "🔍 Checking TypeScript compilation..."
 npm run typecheck
 
-# Tentar build
-echo "🏗️  Tentando build..."
+# Try building
+echo "🏗️  Building..."
 npm run build
 
-echo "✅ Migração concluída!"
+echo "✅ Done!"
 echo ""
-echo "🎯 Próximos passos:"
-echo "1. Verifique se o .env está configurado corretamente"
-echo "2. Suba o banco: docker-compose up postgres"
-echo "3. Teste a aplicação: npm run start:dev"
-echo "4. Acesse o health check: http://localhost:8080/health"
+echo "🎯 Next steps:"
+echo "1. Make sure .env is configured correctly"
+echo "2. Start the database: docker compose up -d postgres"
+echo "3. Test the application: npm run start:dev"
+echo "4. Access the health check: http://localhost:8080/api/health"
 echo ""
-echo "📋 Comandos úteis:"
-echo "  npm run start:dev    # Desenvolvimento moderno"
-echo "  npm run dev          # Desenvolvimento legacy" 
-echo "  npm run test         # Testes"
+echo "📋 Useful commands:"
+echo "  npm run start:dev    # Modern development (build watch + serve)"
+echo "  npm run dev          # Legacy development (ts-node-dev)"
+echo "  npm test             # Unit tests"
 echo "  npm run lint         # Linting"
