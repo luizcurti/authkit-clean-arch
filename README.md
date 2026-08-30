@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/typescript-5.9-blue)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Production-grade REST API built with Clean Architecture, SOLID principles, rigorous TDD and TypeScript. Focused on high test coverage, clear separation of concerns, and maintainable evolution.
+Facebook OAuth login, S3 profile-picture uploads, and E2E tests that run against `pg-mem` instead of a real Postgres instance — a Clean Architecture REST API built test-first, with 229 unit + 31 E2E tests and fail-fast Zod validation of environment secrets in production.
 
 > Current test suite: **229 unit tests + 31 E2E tests** — all passing, 100% line coverage on collected files. CI runs lint, typecheck, unit, E2E, coverage, security, Docker build and API collection checks on every push.
 
