@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/luizcurti/nodejs-tdd-clean-arch/actions/workflows/ci.yml/badge.svg)](https://github.com/luizcurti/nodejs-tdd-clean-arch/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/luizcurti/nodejs-tdd-clean-arch/branch/main/graph/badge.svg)](https://codecov.io/gh/luizcurti/nodejs-tdd-clean-arch)
-[![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)](https://nodejs.org/)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D24.0.0-brightgreen)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/typescript-5.9-blue)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -40,7 +40,7 @@ src/
 
 ## 🧰 Tech Stack
 
-- Node.js >= 20
+- Node.js >= 24
 - TypeScript 5.9
 - Express 4
 - PostgreSQL 15 (TypeORM)
