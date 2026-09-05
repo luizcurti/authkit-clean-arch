@@ -91,5 +91,8 @@
       "eslint --fix",
       "jest --passWithNoTests --findRelatedTests"
     ]
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }
