@@ -1,5 +1,6 @@
-import { getConnectionManager, createConnection, Connection, getConnection, QueryRunner, Repository, ObjectType, ObjectLiteral } from 'typeorm'
+import { DataSource, QueryRunner, Repository, ObjectType, ObjectLiteral } from 'typeorm'
 
+import { ormConfig } from '@/main/config/orm'
 import { ConnectionNotFoundError } from '@/infra/repos/postgres/helpers'
 import { TransactionNotFoundError } from '@/infra/repos/postgres/helpers/errors'
 import { DbTransaction } from '@/application/contracts'
@@ -7,7 +8,7 @@ import { DbTransaction } from '@/application/contracts'
 export class PgConnection implements DbTransaction {
   private static instance?: PgConnection
   private query?: QueryRunner | undefined
-  private connection?: Connection | undefined
+  private connection?: DataSource | undefined
 
   private constructor () {}
 
@@ -19,14 +20,15 @@ export class PgConnection implements DbTransaction {
   }
 
   async connect (): Promise<void> {
-    this.connection = getConnectionManager().has('default')
-      ? getConnection()
-      : await createConnection()
+    if (this.connection?.isInitialized !== true) {
+      this.connection = new DataSource(ormConfig)
+      await this.connection.initialize()
+    }
   }
 
   async disconnect (): Promise<void> {
     if (this.connection === undefined) throw new ConnectionNotFoundError()
-    await this.connection.close()
+    await this.connection.destroy()
     this.query = undefined
     this.connection = undefined
   }

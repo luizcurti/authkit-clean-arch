@@ -11,7 +11,6 @@ module.exports = [
             "*.js",
             "eslint.config.js",
             "jest.config.js",
-            "ormconfig.js",
             "scripts/**/*.js"
         ],
     },
