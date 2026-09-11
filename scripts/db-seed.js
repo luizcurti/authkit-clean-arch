@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Idempotent seed for local/dev/CI environments.
- * Seeds the same fixture user previously provided by dump.sql (id=1, name "Loro"),
- * which scripts/api-collection-test.js and manual testing rely on.
+ * Seeds the fixture user (id=1, name "Loro") that scripts/api-collection-test.js
+ * and the Postman collection rely on.
  */
 require('dotenv/config')
 const { Client } = require('pg')

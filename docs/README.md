@@ -12,7 +12,7 @@ Source: [`mmd/architecture-overview.mmd`](./mmd/architecture-overview.mmd)
 
 ## Facebook login flow
 
-`POST /api/login/facebook` — from the HTTP request down to the Facebook Graph API call, user upsert, and JWT issuance.
+`POST /api/login/facebook` — rate limiting, the Facebook Graph API call (with retry/timeout), user upsert, and access/refresh token issuance.
 
 ![Facebook login flow](./img/request-flow-facebook-login.png)
 
@@ -20,7 +20,7 @@ Source: [`mmd/request-flow-facebook-login.mmd`](./mmd/request-flow-facebook-logi
 
 ## Profile picture upload flow
 
-`PUT /api/users/picture` — authentication, multipart parsing, validation (mime type / size), S3 upload, and repository update.
+`PUT /api/users/picture` — authentication, multipart parsing, validation (mime type / size / magic-byte signature), S3 upload, and repository update.
 
 ![Picture upload flow](./img/request-flow-picture-upload.png)
 

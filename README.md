@@ -65,7 +65,7 @@ The dependency rule isn't just a folder convention — it's enforced by tooling 
 - **`domain` and `application` must never import**: `express`, `typeorm`, `axios`, `multer`, `winston`, `jsonwebtoken`, `@aws-sdk/*`, or anything under `infra`/`main`. This is enforced by an ESLint `no-restricted-imports` rule (`eslint.config.js`) that fails the `lint` CI job.
 - A second, independent check — `tests/architecture/import-boundaries.spec.ts` — statically scans every file under `src/domain` and `src/application` for the same banned imports and fails the `test` CI job if it finds one. It doesn't depend on lint config staying correct, so it survives someone disabling the ESLint rule inline.
 - `application` may depend on domain contracts. `infra` implements domain/application contracts. `main` is the only place responsible for composition (factories wire concrete infra adapters into use cases and controllers).
-- One concrete example: `AdvancedHealthCheckController` used to default-construct a `PgConnection` and import the Winston logger directly — a real violation the new rule caught. It's been fixed to depend on a local `DatabaseChecker` port and an `application/contracts/Logger` port instead, both satisfied by infra adapters wired in `main`.
+- Concrete example: `AdvancedHealthCheckController` depends only on a local `DatabaseChecker` port and an `application/contracts/Logger` port — never on `PgConnection` or the Winston logger directly. Both ports are satisfied by infra adapters wired in `main`.
 
 ### Trade-offs
 
@@ -131,7 +131,7 @@ npm run typecheck
 # Development (auto build + watch)
 npm run start:dev
 
-# Or legacy dev (ts-node-dev direct)
+# Or legacy dev (tsx watch direct)
 npm run dev
 ```
 
