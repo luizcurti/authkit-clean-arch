@@ -1,12 +1,13 @@
 {
   "info": {
-    "name": "Advanced TDD Clean Architecture API",
-    "description": "Request examples for every endpoint, covering success, validation errors, and auth failures. Import together with environment.postman_environment.json.\n\nSet the `accessToken` environment variable to a JWT signed with the API's JWT_SECRET (e.g. `node scripts/generate-test-token.js`). The default environment assumes the database was seeded with dump.sql (user id=1, name \"Loro\").",
+    "name": "AuthKit API",
+    "description": "Request examples for every endpoint, covering success, validation errors, and auth failures. Import together with environment.postman_environment.json.\n\nSet the `accessToken` environment variable to a JWT signed with the API's JWT_SECRET (e.g. `node scripts/generate-test-token.js`). The default environment assumes the database was seeded via `npm run db:seed` (user id=1, name \"Loro\").",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080/api" },
-    { "key": "accessToken", "value": "" }
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" }
   ],
   "item": [
     {
@@ -80,6 +81,60 @@
             {
               "listen": "test",
               "script": { "exec": ["pm.test('status is 401', () => pm.response.to.have.status(401))"] }
+            }
+          ]
+        },
+        {
+          "name": "Refresh with missing refreshToken (validation error)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": "{{baseUrl}}/login/refresh"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('status is 400', () => pm.response.to.have.status(400))"] }
+            }
+          ]
+        },
+        {
+          "name": "Refresh with unknown refreshToken (auth failure)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"refreshToken\": \"unknown_refresh_token\"}" },
+            "url": "{{baseUrl}}/login/refresh"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test('status is 401', () => pm.response.to.have.status(401))"] }
+            }
+          ]
+        },
+        {
+          "name": "Refresh with a real refreshToken (success — obtain one from a live Facebook login response)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"refreshToken\": \"{{refreshToken}}\"}" },
+            "url": "{{baseUrl}}/login/refresh"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('returns a new access and refresh token', () => {",
+                  "  const body = pm.response.json()",
+                  "  pm.expect(body).to.have.property('accessToken')",
+                  "  pm.expect(body).to.have.property('refreshToken')",
+                  "})"
+                ]
+              }
             }
           ]
         }

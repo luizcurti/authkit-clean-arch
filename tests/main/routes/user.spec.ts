@@ -144,11 +144,12 @@ describe('User Routes', () => {
       uploadSpy.mockResolvedValueOnce('https://bucket.s3.amazonaws.com/any_picture.png')
       const { id } = await pgUserRepo.save({ email: 'any_email', name: 'Lourivaldo Vasconcelos' })
       const authorization = sign({ key: id }, env.jwtSecret)
+      const pngBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00])
 
       const { status, body } = await request(app)
         .put('/api/users/picture')
         .set({ authorization })
-        .attach('picture', Buffer.from('any_buffer'), { filename: 'pic.png', contentType: 'image/png' })
+        .attach('picture', pngBuffer, { filename: 'pic.png', contentType: 'image/png' })
 
       expect(status).toBe(200)
       expect(body.pictureUrl).toBe('https://bucket.s3.amazonaws.com/any_picture.png')
@@ -159,14 +160,28 @@ describe('User Routes', () => {
       uploadSpy.mockResolvedValueOnce('https://bucket.s3.amazonaws.com/pic.jpg')
       const { id } = await pgUserRepo.save({ email: 'jpg@email.com', name: 'Any Name' })
       const authorization = sign({ key: id }, env.jwtSecret)
+      const jpgBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])
 
       const { status, body } = await request(app)
         .put('/api/users/picture')
         .set({ authorization })
-        .attach('picture', Buffer.from('any_buffer'), { filename: 'pic.jpg', contentType: 'image/jpeg' })
+        .attach('picture', jpgBuffer, { filename: 'pic.jpg', contentType: 'image/jpeg' })
 
       expect(status).toBe(200)
       expect(body.pictureUrl).toBeDefined()
+    })
+
+    it('should return 400 when file content does not match its declared mime type', async () => {
+      const { id } = await pgUserRepo.save({ email: 'spoofed@email.com', name: 'Any Name' })
+      const authorization = sign({ key: id }, env.jwtSecret)
+
+      const { status, body } = await request(app)
+        .put('/api/users/picture')
+        .set({ authorization })
+        .attach('picture', Buffer.from('any_buffer'), { filename: 'pic.png', contentType: 'image/png' })
+
+      expect(status).toBe(400)
+      expect(body.error).toBeDefined()
     })
 
     it('should return 400 when uploading file with unsupported mime type', async () => {

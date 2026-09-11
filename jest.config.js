@@ -12,7 +12,8 @@ module.exports = {
     '!<rootDir>/src/main/middlewares/**',
     '!<rootDir>/src/main/types/**',
     '!<rootDir>/src/application/contracts/**',
-    '!<rootDir>/src/domain/contracts/**'
+    '!<rootDir>/src/domain/contracts/**',
+    '!<rootDir>/src/infra/repos/postgres/migrations/**'
   ],
   coverageDirectory: 'coverage',
   coverageProvider: 'v8',

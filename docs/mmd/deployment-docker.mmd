@@ -1,7 +1,7 @@
 flowchart LR
     subgraph Host["Docker host"]
         subgraph Network["nodejs-tdd-network (bridge)"]
-            App["app container\nnode:20-alpine\nport 8080"]
+            App["app container\nnode:24-alpine\nport 8080"]
             Postgres["postgres container\npostgres:15-alpine\nport 5432"]
             PgAdmin["pgadmin container\noptional, port 8081"]
         end

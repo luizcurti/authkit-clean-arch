@@ -29,6 +29,8 @@ module.exports = [
                 __dirname: "readonly",
                 __filename: "readonly",
                 global: "readonly",
+                setTimeout: "readonly",
+                clearTimeout: "readonly",
                 // Jest globals
                 describe: "readonly",
                 it: "readonly",
@@ -77,6 +79,28 @@ module.exports = [
         files: ["src/**/*.ts"],
         rules: {
             "@typescript-eslint/no-explicit-any": "off"
+        }
+    },
+    {
+        // Dependency rule: domain and application must stay framework-agnostic.
+        // Infra implements their contracts and Main is the only composition point.
+        files: ["src/domain/**/*.ts", "src/application/**/*.ts"],
+        rules: {
+            "no-restricted-imports": ["error", {
+                paths: [
+                    { name: "express", message: "Domain/Application must not depend on Express. Put HTTP concerns in main/infra." },
+                    { name: "typeorm", message: "Domain/Application must not depend on TypeORM. Put persistence concerns in infra." },
+                    { name: "axios", message: "Domain/Application must not depend on Axios. Put HTTP client concerns in infra." },
+                    { name: "multer", message: "Domain/Application must not depend on Multer. Put upload parsing in main." },
+                    { name: "winston", message: "Domain/Application must not depend on Winston. Put logging in infra." },
+                    { name: "jsonwebtoken", message: "Domain/Application must not depend on jsonwebtoken. Put token signing in infra." }
+                ],
+                patterns: [
+                    { group: ["@aws-sdk/*"], message: "Domain/Application must not depend on the AWS SDK. Put storage concerns in infra." },
+                    { group: ["@/infra/*", "@/infra"], message: "Domain/Application must not depend on infra. Depend on domain contracts instead." },
+                    { group: ["@/main/*", "@/main"], message: "Domain/Application must not depend on main. Main only composes the other layers." }
+                ]
+            }]
         }
     },
     {

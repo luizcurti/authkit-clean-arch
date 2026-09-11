@@ -1,18 +1,28 @@
-import { LoadFacebookUser, TokenGenerator } from '@/domain/contracts/gateways'
-import { SaveFacebookAccount, LoadUserAccount } from '@/domain/contracts/repositories'
+import { LoadFacebookUser, TokenGenerator, Hasher, UUIDGenerator } from '@/domain/contracts/gateways'
+import { SaveFacebookAccount, LoadUserAccount, SaveRefreshToken } from '@/domain/contracts/repositories'
 import { AuthenticationError } from '@/domain/entities/errors'
-import { AccessToken, FacebookAccount } from '@/domain/entities'
+import { AccessToken, RefreshToken, FacebookAccount } from '@/domain/entities'
 
 type Setup = (
   facebook: LoadFacebookUser,
   userAccountRepository: LoadUserAccount & SaveFacebookAccount,
-  token: TokenGenerator
+  refreshTokenRepository: SaveRefreshToken,
+  token: TokenGenerator,
+  hasher: Hasher,
+  idGenerator: UUIDGenerator
 ) => FacebookAuthentication
 type Input = { token: string }
-type Output = { accessToken: string }
+type Output = { accessToken: string, refreshToken: string }
 export type FacebookAuthentication = (input: Input) => Promise<Output>
 
-export const setupFacebookAuthentication: Setup = (facebook, userAccountRepository, token) => {
+export const setupFacebookAuthentication: Setup = (
+  facebook,
+  userAccountRepository,
+  refreshTokenRepository,
+  token,
+  hasher,
+  idGenerator
+) => {
   return async input => {
     const fbData = await facebook.loadUser(input)
     if (fbData !== undefined) {
@@ -20,7 +30,16 @@ export const setupFacebookAuthentication: Setup = (facebook, userAccountReposito
       const facebookAccount = new FacebookAccount(fbData, accountData)
       const { id } = await userAccountRepository.saveWithFacebook(facebookAccount)
       const accessToken = await token.generate({ key: id, expirationInMs: AccessToken.expirationInMs })
-      return { accessToken }
+
+      const refreshToken = idGenerator.uuid({ key: 'rt' })
+      const tokenHash = await hasher.hash(refreshToken)
+      await refreshTokenRepository.saveRefreshToken({
+        userId: id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + RefreshToken.expirationInMs)
+      })
+
+      return { accessToken, refreshToken }
     }
     throw new AuthenticationError()
   }

@@ -1,6 +1,7 @@
 import { Required, RequiredBuffer, RequiredString, Validator, Extension } from '@/application/validation'
 import { AllowedMimeTypes } from '@/application/validation/allowed-mime-types'
 import { MaxFileSize } from './max-file-size'
+import { FileSignature } from './file-signature'
 
 export class ValidatorBuilder {
   private constructor (
@@ -32,6 +33,7 @@ export class ValidatorBuilder {
     const val = this.value as { mimeType?: string, buffer?: Buffer }
     if (val.mimeType !== undefined) this.validators.push(new AllowedMimeTypes(allowed, val.mimeType))
     if (val.buffer !== undefined) this.validators.push(new MaxFileSize(maxSizeInMb, val.buffer))
+    if (val.buffer !== undefined) this.validators.push(new FileSignature(allowed, val.buffer))
     return this
   }
 

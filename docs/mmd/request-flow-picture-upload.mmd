@@ -16,7 +16,7 @@ sequenceDiagram
         Auth->>Route: userId
         Route->>Multer: parse multipart file
         Route->>Controller: handle({ file, userId })
-        Controller->>Controller: validate(file required, mime type, max size)
+        Controller->>Controller: validate(file required, mime type, max size, magic-byte signature)
         alt validation fails
             Controller-->>Client: 400 Validation Error
         else file valid

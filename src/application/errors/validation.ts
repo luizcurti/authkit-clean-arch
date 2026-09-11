@@ -20,3 +20,10 @@ export class MaxFileSizeError extends Error {
     this.name = 'MaxFileSizeError'
   }
 }
+
+export class InvalidFileSignatureError extends Error {
+  constructor () {
+    super('File content does not match its declared type')
+    this.name = 'InvalidFileSignatureError'
+  }
+}

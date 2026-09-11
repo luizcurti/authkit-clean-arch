@@ -1,5 +1,6 @@
 import { mock, MockProxy } from 'jest-mock-extended'
 import { FacebookApi, HttpGetClient } from '@/infra/gateways'
+import { ExternalServiceError } from '@/domain/entities/errors'
 
 describe('FacebookApi', () => {
   let clientId: string
@@ -74,5 +75,13 @@ describe('FacebookApi', () => {
     const fbUser = await suit.loadUser({ token: 'any_client_token' })
 
     expect(fbUser).toBeUndefined()
+  })
+
+  it('Should rethrow ExternalServiceError if HttpGetClient throws it', async () => {
+    httpClient.get.mockReset().mockRejectedValueOnce(new ExternalServiceError())
+
+    const promise = suit.loadUser({ token: 'any_client_token' })
+
+    await expect(promise).rejects.toBeInstanceOf(ExternalServiceError)
   })
 })

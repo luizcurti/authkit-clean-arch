@@ -2,6 +2,7 @@ import { HttpResponse, unauthorized, ok } from '@/application/helpers'
 import { Validator, ValidatorBuilder } from '@/application/validation'
 import { Controller } from '@/application/controllers'
 import { FacebookAuthentication } from '@/domain/use-cases'
+import { AuthenticationError } from '@/domain/entities/errors'
 import { FacebookLoginRequest, FacebookLoginResponse } from '@/application/dtos'
 
 type Model = Error | FacebookLoginResponse
@@ -11,13 +12,13 @@ export class FacebookLoginController extends Controller<FacebookLoginRequest> {
     super()
   }
 
-  /* istanbul ignore next: coverage instrumentation doesn't mark this block correctly; 200/401 paths are already tested */
   async perform ({ token }: FacebookLoginRequest): Promise<HttpResponse<Model>> {
     try {
-      const accessToken = await this.facebookAuthentication({ token: token! })
-      return ok(accessToken)
-    } catch {
-      return unauthorized()
+      const tokens = await this.facebookAuthentication({ token: token! })
+      return ok(tokens)
+    } catch (error) {
+      if (error instanceof AuthenticationError) return unauthorized()
+      throw error
     }
   }
 

@@ -14,6 +14,17 @@ export interface FacebookLoginRequest {
 
 export interface FacebookLoginResponse {
   accessToken: string
+  refreshToken: string
+}
+
+// Refresh Token DTOs
+export interface RefreshTokenRequest {
+  refreshToken?: string | null
+}
+
+export interface RefreshTokenResponse {
+  accessToken: string
+  refreshToken: string
 }
 
 // Save Picture DTOs

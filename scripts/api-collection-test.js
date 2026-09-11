@@ -4,7 +4,7 @@
  * Exercises the same requests documented in docs/api/collection.postman_collection.json
  * against a running instance of the API (e.g. the docker-compose stack).
  *
- * Assumes the database was seeded with dump.sql (user id=1, name "Loro").
+ * Assumes the database was seeded via `npm run db:seed` (user id=1, name "Loro").
  */
 require('dotenv/config')
 const { sign } = require('jsonwebtoken')
@@ -42,6 +42,25 @@ const cases = [
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: 'invalid_token' })
+    }),
+    expectedStatus: 401
+  },
+  {
+    name: 'POST /login/refresh with missing refreshToken returns 400 validation error',
+    request: () => fetch(`${baseUrl}/login/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    }),
+    expectedStatus: 400,
+    assert: body => typeof body.error === 'string'
+  },
+  {
+    name: 'POST /login/refresh with unknown refreshToken returns 401',
+    request: () => fetch(`${baseUrl}/login/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: 'unknown_refresh_token' })
     }),
     expectedStatus: 401
   },

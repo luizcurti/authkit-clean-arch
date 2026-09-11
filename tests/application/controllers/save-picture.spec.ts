@@ -1,5 +1,5 @@
 import { Controller, SavePictureController } from '@/application/controllers'
-import { AllowedMimeTypes, MaxFileSize, Required, RequiredBuffer } from '@/application/validation'
+import { AllowedMimeTypes, FileSignature, MaxFileSize, Required, RequiredBuffer } from '@/application/validation'
 
 describe('SavePictureController', () => {
   let sut: SavePictureController
@@ -10,7 +10,7 @@ describe('SavePictureController', () => {
   let userId: string
 
   beforeAll(() => {
-    buffer = Buffer.from('any_buffer')
+    buffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00])
     mimeType = 'image/png'
     file = { buffer, mimeType }
     userId = 'any_user_id'
@@ -35,7 +35,8 @@ describe('SavePictureController', () => {
       new Required(file, 'file'),
       new RequiredBuffer(buffer, 'file'),
       new AllowedMimeTypes(['png', 'jpg'], mimeType),
-      new MaxFileSize(5, buffer)
+      new MaxFileSize(5, buffer),
+      new FileSignature(['png', 'jpg'], buffer)
     ])
   })
 

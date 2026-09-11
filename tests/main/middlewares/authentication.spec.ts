@@ -27,6 +27,6 @@ describe('AuthenticationMiddleware', () => {
       .set({ authorization })
 
     expect(status).toBe(200)
-    expect(body).toEqual({ userId: 'any_user_id' })
+    expect(body).toEqual({ userId: 'any_user_id', requestId: expect.any(String) })
   })
 })

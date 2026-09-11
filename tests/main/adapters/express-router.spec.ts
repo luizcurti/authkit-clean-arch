@@ -92,4 +92,16 @@ describe('ExpressRouter', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'any_error' })
     expect(res.json).toHaveBeenCalledTimes(1)
   })
+
+  it('should include requestId in the error body when present in req.locals', async () => {
+    const req = getMockReq({ locals: { requestId: 'any_request_id' } })
+    controller.handle.mockResolvedValueOnce({
+      statusCode: 400,
+      data: new Error('any_error')
+    })
+
+    await sut(req, res, next)
+
+    expect(res.json).toHaveBeenCalledWith({ error: 'any_error', requestId: 'any_request_id' })
+  })
 })

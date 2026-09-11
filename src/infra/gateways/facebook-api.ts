@@ -1,5 +1,6 @@
 import { HttpGetClient } from '@/infra/gateways'
 import { LoadFacebookUser } from '@/domain/contracts/gateways'
+import { ExternalServiceError } from '@/domain/entities/errors'
 
 type AppToken = {
   access_token: string
@@ -36,7 +37,10 @@ export class FacebookApi implements LoadFacebookUser {
         name,
         email
       }))
-      .catch(() => undefined)
+      .catch((error) => {
+        if (error instanceof ExternalServiceError) throw error
+        return undefined
+      })
   }
 
   private async getAppToken (): Promise<AppToken> {

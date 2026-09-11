@@ -1,6 +1,7 @@
 import { AuthenticationError } from '@/domain/entities/errors/authentication'
+import { ExternalServiceError } from '@/domain/entities/errors'
 import { FacebookLoginController } from '@/application/controllers/facebook-login'
-import { UnauthorizedError } from '@/application/errors'
+import { BadGatewayError, ServerError, UnauthorizedError } from '@/application/errors'
 import { RequiredString } from '@/application/validation'
 import { Controller } from '@/application/controllers/controller'
 
@@ -97,26 +98,12 @@ describe('FacebookLoginController', () => {
       })
     })
 
-    it('Should return 401 if FacebookAuthentication throws any error', async () => {
+    it('Should rethrow when FacebookAuthentication throws a non-authentication error', async () => {
       facebookAuth.mockRejectedValueOnce(new Error('any_error'))
-      
-      const httpResponse = await sut.perform({ token })
 
-      expect(httpResponse).toEqual({
-        statusCode: 401,
-        data: new UnauthorizedError()
-      })
-    })
+      const promise = sut.perform({ token })
 
-    it('Should return 401 if FacebookAuthentication throws string error', async () => {
-      facebookAuth.mockRejectedValueOnce('string error')
-      
-      const httpResponse = await sut.perform({ token })
-
-      expect(httpResponse).toEqual({
-        statusCode: 401,
-        data: new UnauthorizedError()
-      })
+      await expect(promise).rejects.toThrow(new Error('any_error'))
     })
 
     it('Should return 200 when perform succeeds with custom token', async () => {
@@ -160,6 +147,28 @@ describe('FacebookLoginController', () => {
         data: {
           accessToken: 'any_value'
         }
+      })
+    })
+
+    it('Should return 500 through handle when FacebookAuthentication throws a generic error', async () => {
+      facebookAuth.mockRejectedValueOnce(new Error('any_error'))
+
+      const httpResponse = await sut.handle({ token })
+
+      expect(httpResponse).toEqual({
+        statusCode: 500,
+        data: expect.any(ServerError)
+      })
+    })
+
+    it('Should return 502 through handle when FacebookAuthentication throws ExternalServiceError', async () => {
+      facebookAuth.mockRejectedValueOnce(new ExternalServiceError())
+
+      const httpResponse = await sut.handle({ token })
+
+      expect(httpResponse).toEqual({
+        statusCode: 502,
+        data: new BadGatewayError()
       })
     })
   })

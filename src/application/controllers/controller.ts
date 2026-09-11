@@ -1,4 +1,4 @@
-import { badRequest, HttpResponse, serverError } from '@/application/helpers'
+import { badRequest, HttpResponse, mapError } from '@/application/helpers'
 import { ValidationComposite, Validator } from '@/application/validation'
 
 export abstract class Controller<T = unknown> {
@@ -16,7 +16,7 @@ export abstract class Controller<T = unknown> {
     try {
       return await this.perform(httpRequest) // without await, the error won't be caught by try/catch
     } catch (error: unknown) {
-      return serverError(error)
+      return mapError(error)
     }
   }
 

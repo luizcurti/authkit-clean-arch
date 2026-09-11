@@ -37,7 +37,10 @@ const envSchema = z.object({
     : z.string().default('test_s3_secret_key'),
   S3_BUCKET: isProduction
     ? z.string().min(1, 'S3_BUCKET is required in production')
-    : z.string().default('test-bucket')
+    : z.string().default('test-bucket'),
+
+  // CORS allowlist - comma-separated list of allowed origins
+  CORS_ALLOWED_ORIGINS: z.string().default('')
 })
 
 const rawEnv = {
@@ -53,7 +56,8 @@ const rawEnv = {
   JWT_SECRET: process.env.JWT_SECRET,
   S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID,
   S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY,
-  S3_BUCKET: process.env.S3_BUCKET
+  S3_BUCKET: process.env.S3_BUCKET,
+  CORS_ALLOWED_ORIGINS: process.env.CORS_ALLOWED_ORIGINS
 }
 
 // Validation with proper error handling
@@ -99,6 +103,10 @@ export const env = {
   },
   appPort: validatedEnv.PORT,
   jwtSecret: validatedEnv.JWT_SECRET,
+  corsAllowedOrigins: validatedEnv.CORS_ALLOWED_ORIGINS
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(origin => origin.length > 0),
   nodeEnv: validatedEnv.NODE_ENV,
   isDevelopment: validatedEnv.NODE_ENV === 'development',
   isProduction: validatedEnv.NODE_ENV === 'production',

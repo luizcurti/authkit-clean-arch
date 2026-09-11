@@ -1,7 +1,6 @@
 import { Controller } from '@/application/controllers'
 import { HttpResponse, ok, serverError } from '@/application/helpers'
-import { PgConnection } from '@/infra/repos/postgres/helpers/connection'
-import { log } from '@/infra/logger'
+import { Logger } from '@/application/contracts'
 import { AdvancedHealthCheckResponse, HealthStatus } from '@/application/dtos'
 
 export interface DatabaseChecker {
@@ -10,7 +9,8 @@ export interface DatabaseChecker {
 
 export class AdvancedHealthCheckController extends Controller<void> {
   constructor (
-    private readonly pgConnection: DatabaseChecker = PgConnection.getInstance()
+    private readonly pgConnection: DatabaseChecker,
+    private readonly logger: Logger
   ) {
     super()
   }
@@ -44,13 +44,13 @@ export class AdvancedHealthCheckController extends Controller<void> {
 
       // Log for monitoring
       if (overallStatus !== 'healthy') {
-        log.warn('Health check warning', { status: overallStatus, checks: response.checks })
+        this.logger.warn('Health check warning', { status: overallStatus, checks: response.checks })
       }
-      
+
       return ok(response)
     } catch (error: unknown) {
       const err = error as Error
-      log.error('Health check failed', { error: err.message, stack: err.stack })
+      this.logger.error('Health check failed', { error: err.message, stack: err.stack })
       return serverError(err)
     }
   }

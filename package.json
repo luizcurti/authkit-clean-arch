@@ -1,7 +1,7 @@
 {
-  "name": "nodejs-advanced-tdd-clean-architecture",
+  "name": "authkit-clean-arch",
   "version": "1.0.0",
-  "description": "",
+  "description": "Production-oriented authentication API demonstrating Clean Architecture, TDD, OAuth, refresh-token rotation, PostgreSQL, S3 and CI/CD",
   "type": "commonjs",
   "scripts": {
     "start": "node -r dotenv/config dist/main",
@@ -22,12 +22,27 @@
     "test:api": "node scripts/api-collection-test.js",
     "dev": "TS_NODE_DEV=true tsx watch --inspect=0.0.0.0:9229 -r dotenv/config src/main",
     "typecheck": "tsc --noEmit -p tsconfig-build.json",
+    "migration:generate": "TS_NODE_DEV=true typeorm-ts-node-commonjs migration:generate -d src/main/config/data-source.ts",
+    "migration:create": "typeorm-ts-node-commonjs migration:create",
+    "migration:run": "TS_NODE_DEV=true typeorm-ts-node-commonjs migration:run -d src/main/config/data-source.ts",
+    "migration:revert": "TS_NODE_DEV=true typeorm-ts-node-commonjs migration:revert -d src/main/config/data-source.ts",
+    "migration:run:prod": "typeorm migration:run -d dist/main/config/data-source.js",
+    "db:seed": "node scripts/db-seed.js",
     "prepare": "husky || true",
     "check": "ncu",
     "update": "ncu -u"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "nodejs",
+    "typescript",
+    "clean-architecture",
+    "tdd",
+    "oauth",
+    "jwt",
+    "postgresql",
+    "authentication"
+  ],
+  "author": "Luiz Curti",
   "license": "MIT",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -69,6 +84,8 @@
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.2",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "module-alias": "^2.3.4",
     "multer": "^2.3.0",

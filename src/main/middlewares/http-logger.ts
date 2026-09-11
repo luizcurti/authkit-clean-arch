@@ -16,7 +16,8 @@ export const httpLogger = (req: Request, res: Response, next: NextFunction): voi
       statusCode,
       duration: `${duration}ms`,
       ip: ip || req.connection.remoteAddress,
-      userAgent: req.get('user-agent') || 'unknown'
+      userAgent: req.get('user-agent') || 'unknown',
+      requestId: req.locals?.requestId
     }
     
     // Log based on status code

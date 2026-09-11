@@ -1,8 +1,8 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "Advanced TDD Clean Architecture API",
-    "description": "REST API built with Clean Architecture, TDD and SOLID principles",
+    "title": "AuthKit API",
+    "description": "Production-oriented authentication API built with Clean Architecture and TDD — Facebook OAuth, JWT access tokens with refresh-token rotation, and S3-backed profile pictures.",
     "version": "1.0.0",
     "contact": {
       "name": "API Support",
@@ -41,8 +41,8 @@
     "/login/facebook": {
       "post": {
         "tags": ["Authentication"],
-  "summary": "Login with Facebook",
-  "description": "Authenticate user using Facebook OAuth token",
+        "summary": "Login with Facebook",
+        "description": "Authenticate user using a Facebook OAuth token. Issues a short-lived access token (15 min) and a refresh token (7 days). Rate limited to 10 requests/min/IP.",
         "requestBody": {
           "required": true,
           "content": {
@@ -65,37 +65,86 @@
                   "$ref": "#/components/schemas/FacebookLoginResponse"
                 },
                 "example": {
-                  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "refreshToken": "rt_9c1b6e2a-3f4d-4b7a-9c2e-1a2b3c4d5e6f"
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid or missing token",
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "description": "Invalid Facebook token",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "error": "unauthorized", "requestId": "b1e6c8b0-..." }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "502": {
+            "description": "The Facebook Graph API is unavailable (timeout, network error, or 5xx) after retries",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "error": "An upstream service failed to respond", "requestId": "b1e6c8b0-..." }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/login/refresh": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Refresh access token",
+        "description": "Exchanges a valid refresh token for a new access token and refresh token (rotation). The previous refresh token is revoked — reusing it returns 401. Rate limited to 10 requests/min/IP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              },
+              "example": {
+                "refreshToken": "rt_9c1b6e2a-3f4d-4b7a-9c2e-1a2b3c4d5e6f"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New access token and refresh token issued",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/RefreshTokenResponse"
                 },
                 "example": {
-                  "error": "ValidationError",
-                  "message": "The field token is required"
+                  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "refreshToken": "rt_1f2e3d4c-5b6a-4978-8e7f-0a1b2c3d4e5f"
                 }
               }
             }
           },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
           "401": {
-            "description": "Authentication failed",
+            "description": "Refresh token is unknown, expired, or already rotated/revoked",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Unauthorized"
-                }
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "error": "unauthorized", "requestId": "b1e6c8b0-..." }
               }
             }
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
           }
         }
       }
@@ -103,8 +152,8 @@
     "/users/picture": {
       "put": {
         "tags": ["User"],
-  "summary": "Update profile picture",
-  "description": "Upload user's profile picture (PNG or JPG, max 5MB)",
+        "summary": "Update profile picture",
+        "description": "Upload user's profile picture (PNG or JPG, max 5MB). The file's magic bytes are validated against the declared MIME type to reject spoofed content.",
         "security": [
           {
             "bearerAuth": []
@@ -143,37 +192,23 @@
             }
           },
           "400": {
-            "description": "Bad request (invalid file type, file too large, or missing file)",
+            "description": "Invalid file: missing, wrong MIME type, over 5MB, or content doesn't match its declared type",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Invalid file type. Allowed: png, jpg"
-                }
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "error": "Unsupported type. Allowed types: png, jpg", "requestId": "b1e6c8b0-..." }
               }
             }
           },
           "403": {
-            "description": "Forbidden — missing or invalid JWT token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Forbidden"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       },
       "delete": {
         "tags": ["User"],
-  "summary": "Remove profile picture",
-  "description": "Removes user's profile picture and returns initials",
+        "summary": "Remove profile picture",
+        "description": "Removes user's profile picture and returns initials",
         "security": [
           {
             "bearerAuth": []
@@ -194,17 +229,7 @@
             }
           },
           "403": {
-            "description": "Forbidden — missing or invalid JWT token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "example": {
-                  "error": "Forbidden"
-                }
-              }
-            }
+            "$ref": "#/components/responses/Forbidden"
           }
         }
       }
@@ -212,8 +237,8 @@
     "/health": {
       "get": {
         "tags": ["Health"],
-  "summary": "Basic health check",
-  "description": "Checks basic application status",
+        "summary": "Basic health check",
+        "description": "Checks basic application status",
         "responses": {
           "200": {
             "description": "Application is running",
@@ -242,8 +267,8 @@
     "/health/detailed": {
       "get": {
         "tags": ["Health"],
-  "summary": "Detailed health check",
-  "description": "Checks detailed status including database, memory and system",
+        "summary": "Detailed health check",
+        "description": "Checks detailed status including database, memory and system",
         "responses": {
           "200": {
             "description": "Detailed application status",
@@ -271,7 +296,7 @@
                     },
                     "system": {
                       "platform": "linux",
-                      "nodeVersion": "v20.10.0",
+                      "nodeVersion": "v24.0.0",
                       "processId": 1234
                     }
                   }
@@ -289,7 +314,36 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "JWT token obtained from login endpoint"
+        "description": "JWT access token obtained from a login/refresh endpoint"
+      }
+    },
+    "responses": {
+      "ValidationError": {
+        "description": "Missing or invalid request field",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": "The field token is required", "requestId": "b1e6c8b0-..." }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Missing or invalid JWT token",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": "Access denied", "requestId": "b1e6c8b0-..." }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "Rate limit exceeded for this endpoint/IP",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": { "error": "Too many login attempts, please try again later" }
+          }
+        }
       }
     },
     "schemas": {
@@ -309,8 +363,39 @@
         "properties": {
           "accessToken": {
             "type": "string",
-            "description": "JWT token for API authentication",
+            "description": "JWT access token for API authentication (expires in 15 min)",
             "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Opaque refresh token (expires in 7 days, single use — rotated on each refresh)",
+            "example": "rt_9c1b6e2a-3f4d-4b7a-9c2e-1a2b3c4d5e6f"
+          }
+        }
+      },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "required": ["refreshToken"],
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "A previously issued, non-expired, non-revoked refresh token",
+            "example": "rt_9c1b6e2a-3f4d-4b7a-9c2e-1a2b3c4d5e6f"
+          }
+        }
+      },
+      "RefreshTokenResponse": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "New JWT access token (expires in 15 min)",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "New refresh token — the previous one is revoked",
+            "example": "rt_1f2e3d4c-5b6a-4978-8e7f-0a1b2c3d4e5f"
           }
         }
       },
@@ -451,11 +536,11 @@
         "properties": {
           "error": {
             "type": "string",
-            "description": "Error name"
+            "description": "Human-readable error message"
           },
-          "message": {
+          "requestId": {
             "type": "string",
-            "description": "Descriptive error message"
+            "description": "Correlation id for this request (echoes the X-Request-Id request header, or a generated one)"
           }
         }
       }

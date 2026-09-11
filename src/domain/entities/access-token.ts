@@ -1,3 +1,3 @@
 export const AccessToken = {
-  expirationInMs: 30 * 60 * 1000
+  expirationInMs: 15 * 60 * 1000
 }

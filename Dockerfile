@@ -21,9 +21,12 @@ FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY package.json ./
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=builder /app/dist ./dist
+COPY --chown=node:node package.json ./
+COPY --chown=node:node scripts ./scripts
+COPY --chown=node:node --from=deps /app/node_modules ./node_modules
+COPY --chown=node:node --from=builder /app/dist ./dist
+
+USER node
 
 EXPOSE 8080
 

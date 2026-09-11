@@ -1,4 +1,5 @@
-import { ServerError } from '@/application/errors'
+import { BadGatewayError, ServerError } from '@/application/errors'
+import { ExternalServiceError } from '@/domain/entities/errors'
 import { ValidationComposite } from '@/application/validation/composite'
 import { Controller } from '@/application/controllers'
 import { HttpResponse } from '@/application/helpers'
@@ -83,6 +84,17 @@ describe('Controller', () => {
     expect(httpResponse).toEqual({
       statusCode: 500,
       data: new ServerError()
+    })
+  })
+
+  it('Should return 502 if perform throws ExternalServiceError', async () => {
+    jest.spyOn(sut, 'perform').mockRejectedValueOnce(new ExternalServiceError())
+
+    const httpResponse = await sut.handle('any_value')
+
+    expect(httpResponse).toEqual({
+      statusCode: 502,
+      data: new BadGatewayError()
     })
   })
 

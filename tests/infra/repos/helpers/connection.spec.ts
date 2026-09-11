@@ -7,6 +7,8 @@ jest.mock('typeorm', () => ({
   Entity: jest.fn(() => () => {}),
   PrimaryGeneratedColumn: jest.fn(() => () => {}),
   Column: jest.fn(() => () => {}),
+  Index: jest.fn(() => () => {}),
+  CreateDateColumn: jest.fn(() => () => {}),
   DataSource: jest.fn()
 }))
 

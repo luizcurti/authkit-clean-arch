@@ -19,3 +19,10 @@ export class ForbiddenError extends Error {
     this.name = 'ForbiddenError'
   }
 }
+
+export class BadGatewayError extends Error {
+  constructor () {
+    super('An upstream service failed to respond')
+    this.name = 'BadGatewayError'
+  }
+}

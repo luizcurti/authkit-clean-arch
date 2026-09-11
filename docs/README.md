@@ -1,6 +1,6 @@
 # Documentation
 
-Architecture and flow diagrams for the Advanced TDD Clean Architecture API. Sources live in [`mmd/`](./mmd) (Mermaid), rendered PNGs in [`img/`](./img). The Postman collection lives in [`api/`](./api).
+Architecture and flow diagrams for AuthKit. Sources live in [`mmd/`](./mmd) (Mermaid), rendered PNGs in [`img/`](./img). The Postman collection lives in [`api/`](./api).
 
 ## System architecture
 
@@ -36,7 +36,7 @@ Source: [`mmd/deployment-docker.mmd`](./mmd/deployment-docker.mmd)
 
 ## Database schema
 
-The API currently persists a single `users` table (see `dump.sql` and `src/infra/repos/postgres/entities/user.ts`).
+Schema is owned by TypeORM migrations (see `src/infra/repos/postgres/migrations/` and the entities in `src/infra/repos/postgres/entities/`) — `users` plus `refresh_tokens` for refresh-token rotation/revocation.
 
 ![Database schema](./img/db-schema.png)
 

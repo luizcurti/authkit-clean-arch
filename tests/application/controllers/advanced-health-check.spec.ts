@@ -1,23 +1,20 @@
 import { AdvancedHealthCheckController, DatabaseChecker } from '@/application/controllers/advanced-health-check'
-import { log } from '@/infra/logger'
-
-jest.mock('@/infra/logger', () => ({
-  log: {
-    warn: jest.fn(),
-    error: jest.fn()
-  }
-}))
+import { Logger } from '@/application/contracts'
 
 describe('AdvancedHealthCheckController', () => {
   let sut: AdvancedHealthCheckController
   let dbChecker: jest.Mocked<DatabaseChecker>
+  let logger: jest.Mocked<Logger>
 
   beforeEach(() => {
     dbChecker = {
       runQuery: jest.fn().mockResolvedValue([{ '?column?': 1 }])
     }
-    sut = new AdvancedHealthCheckController(dbChecker)
-    jest.clearAllMocks()
+    logger = {
+      warn: jest.fn(),
+      error: jest.fn()
+    }
+    sut = new AdvancedHealthCheckController(dbChecker, logger)
   })
 
   it('should return 200 with healthy status when all checks pass', async () => {
@@ -64,7 +61,7 @@ describe('AdvancedHealthCheckController', () => {
     expect(result.statusCode).toBe(200)
     expect(result.data.status).toBe('degraded')
     expect(result.data.checks.memory.status).toBe('warning')
-    expect(log.warn).toHaveBeenCalledWith('Health check warning', expect.any(Object))
+    expect(logger.warn).toHaveBeenCalledWith('Health check warning', expect.any(Object))
 
     process.memoryUsage = originalMemoryUsage
   })
@@ -78,7 +75,7 @@ describe('AdvancedHealthCheckController', () => {
     expect(result.data.status).toBe('unhealthy')
     expect(result.data.checks.database.status).toBe('down')
     expect(result.data.checks.database.error).toBe('Connection refused')
-    expect(log.warn).toHaveBeenCalledWith('Health check warning', expect.any(Object))
+    expect(logger.warn).toHaveBeenCalledWith('Health check warning', expect.any(Object))
   })
 
   it('should return degraded status when memory is critical', async () => {
@@ -98,7 +95,7 @@ describe('AdvancedHealthCheckController', () => {
     expect(result.statusCode).toBe(200)
     expect(result.data.status).toBe('degraded')
     expect(result.data.checks.memory.status).toBe('critical')
-    expect(log.warn).toHaveBeenCalled()
+    expect(logger.warn).toHaveBeenCalled()
 
     process.memoryUsage = originalMemoryUsage
   })
@@ -125,7 +122,7 @@ describe('AdvancedHealthCheckController', () => {
     expect(result.statusCode).toBe(500)
     expect(result.data).toBeInstanceOf(Error)
     expect((result.data as any).message).toBe('Server failed. Try again later')
-    expect(log.error).toHaveBeenCalledWith('Health check failed', {
+    expect(logger.error).toHaveBeenCalledWith('Health check failed', {
       error: unexpectedError.message,
       stack: unexpectedError.stack
     })

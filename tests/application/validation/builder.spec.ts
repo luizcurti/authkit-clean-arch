@@ -1,4 +1,4 @@
-import { AllowedMimeTypes, MaxFileSize, Required, RequiredBuffer, RequiredString } from '@/application/validation'
+import { AllowedMimeTypes, FileSignature, MaxFileSize, Required, RequiredBuffer, RequiredString } from '@/application/validation'
 import { ValidatorBuilder } from '@/application/validation/builder'
 
 describe('ValidationBuilder', () => {
@@ -53,7 +53,10 @@ describe('ValidationBuilder', () => {
       .image({ allowed: ['png'], maxSizeInMb: 6 })
       .build()
 
-    expect(validators).toEqual([new MaxFileSize(6, buffer)])
+    expect(validators).toEqual([
+      new MaxFileSize(6, buffer),
+      new FileSignature(['png'], buffer)
+    ])
   })
 
   it('Should return correct image validators', () => {
@@ -75,7 +78,8 @@ describe('ValidationBuilder', () => {
 
     expect(validators).toEqual([
       new AllowedMimeTypes(['png'], 'image/png'),
-      new MaxFileSize(6, buffer)
+      new MaxFileSize(6, buffer),
+      new FileSignature(['png'], buffer)
     ])
   })
 })
