@@ -1,0 +1,43 @@
+sequenceDiagram
+    actor Client
+    participant Limiter as authRateLimiter
+    participant Route as POST /api/login/facebook
+    participant Controller as FacebookLoginController
+    participant UseCase as FacebookAuthentication
+    participant FbGateway as FacebookApi Gateway
+    participant Repo as PgUserAccountRepository
+    participant RtRepo as PgRefreshTokenRepository
+    participant Jwt as JwtTokenHandler
+    participant Hasher as CryptoHasher
+
+    Client->>Limiter: POST { token }
+    alt too many requests
+        Limiter-->>Client: 429 Too Many Requests
+    else within limit
+        Limiter->>Route: forward
+        Route->>Controller: handle(request)
+        Controller->>Controller: validate(token required)
+        alt token missing
+            Controller-->>Client: 400 Validation Error
+        else token present
+            Controller->>UseCase: execute({ token })
+            UseCase->>FbGateway: loadUser({ token })
+            FbGateway-->>UseCase: FacebookAccount | undefined | throws ExternalServiceError
+            alt Facebook unavailable (5xx/network, after retries)
+                UseCase-->>Controller: rethrows ExternalServiceError
+                Controller-->>Client: 502 Bad Gateway
+            else invalid Facebook token
+                UseCase-->>Controller: throws AuthenticationError
+                Controller-->>Client: 401 Unauthorized
+            else valid Facebook token
+                UseCase->>Repo: load / save user by email
+                Repo-->>UseCase: user id
+                UseCase->>Jwt: generate({ key: userId, 15m })
+                Jwt-->>UseCase: accessToken
+                UseCase->>Hasher: hash(refreshToken)
+                UseCase->>RtRepo: saveRefreshToken({ userId, tokenHash, familyId, 7d })
+                UseCase-->>Controller: { accessToken, refreshToken }
+                Controller-->>Client: 200 { accessToken, refreshToken }
+            end
+        end
+    end

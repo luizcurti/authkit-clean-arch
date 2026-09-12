@@ -1,0 +1,63 @@
+flowchart TB
+    subgraph Client
+        C[HTTP Client]
+    end
+
+    subgraph Main["main — composition root"]
+        Routes[Routes / Express Router]
+        Factories[Factories]
+        Env[Env validation - Zod]
+        Swagger[Swagger UI]
+    end
+
+    subgraph Application["application — controllers, middlewares, validation"]
+        Controllers[Controllers]
+        Middlewares[Middlewares]
+        Validation[Validators]
+    end
+
+    subgraph Domain["domain — pure business rules"]
+        UseCases[Use Cases]
+        Entities[Entities]
+        Contracts[Gateway / Repository contracts]
+    end
+
+    subgraph Infra["infra — concrete adapters"]
+        Repos[Postgres Repositories - TypeORM]
+        FbGateway[Facebook API Gateway]
+        S3Gateway[AWS S3 Gateway]
+        JwtGateway[JWT Token Gateway]
+        Logger[Winston Logger]
+    end
+
+    subgraph External["external services"]
+        DB[(PostgreSQL)]
+        FB[Facebook Graph API]
+        S3[(AWS S3)]
+    end
+
+    C --> Routes
+    Routes --> Controllers
+    Controllers --> Middlewares
+    Controllers --> UseCases
+    UseCases --> Entities
+    UseCases --> Contracts
+    Contracts -.implemented by.-> Repos
+    Contracts -.implemented by.-> FbGateway
+    Contracts -.implemented by.-> S3Gateway
+    Contracts -.implemented by.-> JwtGateway
+    Factories --> Controllers
+    Factories --> UseCases
+    Factories --> Repos
+    Factories --> FbGateway
+    Factories --> S3Gateway
+    Factories --> JwtGateway
+    Repos --> DB
+    FbGateway --> FB
+    S3Gateway --> S3
+    Application --> Logger
+
+    style Domain fill:#e8f4ea,stroke:#2f7a3f
+    style Application fill:#eef2fb,stroke:#3a5bbf
+    style Infra fill:#fbf1e6,stroke:#b5772a
+    style Main fill:#f4eefb,stroke:#7a3fbf

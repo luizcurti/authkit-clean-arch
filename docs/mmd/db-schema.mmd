@@ -1,0 +1,19 @@
+erDiagram
+    USERS {
+        serial id PK
+        text name
+        text email
+        text facebook_id
+        text picture_url
+        text initials
+    }
+    REFRESH_TOKENS {
+        serial id PK
+        integer user_id FK
+        text token_hash UK
+        text family_id
+        timestamp expires_at
+        timestamp revoked_at
+        timestamp created_at
+    }
+    USERS ||--o{ REFRESH_TOKENS : issues
