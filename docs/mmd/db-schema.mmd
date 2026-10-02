@@ -1,0 +1,29 @@
+erDiagram
+    USERS {
+        serial id PK
+        text name
+        text email UK "lowercase (CHECK)"
+        text facebook_id UK
+        text picture_key
+        text initials
+    }
+    REFRESH_TOKENS {
+        serial id PK
+        integer user_id "users.id (no FK constraint)"
+        text token_hash UK
+        text family_id "indexed"
+        timestamp expires_at
+        timestamp revoked_at
+        timestamp created_at
+    }
+    OUTBOX_EVENTS {
+        serial id PK
+        text type "e.g. ProfilePictureReplaced"
+        jsonb payload
+        integer attempts
+        timestamptz locked_until "lease / retry delay"
+        text last_error
+        timestamptz processed_at "indexed"
+        timestamptz created_at
+    }
+    USERS ||--o{ REFRESH_TOKENS : "issues (logical)"

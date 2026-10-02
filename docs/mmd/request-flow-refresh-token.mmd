@@ -1,0 +1,58 @@
+sequenceDiagram
+    actor Client
+    participant Limiter as authRateLimiter
+    participant Route as POST /api/login/refresh
+    participant Controller as RefreshTokenController
+    participant UseCase as RefreshAccessToken
+    participant Hasher as CryptoHasher
+    participant RtRepo as PgRefreshTokenRepository
+    participant Jwt as JwtTokenHandler
+
+    Client->>Limiter: POST { refreshToken }
+    alt too many requests
+        Limiter-->>Client: 429 Too Many Requests
+    else within limit
+        Limiter->>Route: forward
+        Route->>Controller: handle(request)
+        Controller->>Controller: validate(refreshToken required, a string)
+        alt refreshToken missing or not a string
+            Controller-->>Client: 400 Validation Error
+        else refreshToken present
+            Controller->>UseCase: execute({ refreshToken }) inside a DB transaction
+            note right of Controller: committed on 2xx/4xx,<br/>rolled back on 5xx
+            UseCase->>Hasher: hash(refreshToken)
+            UseCase->>RtRepo: loadByHash({ tokenHash })
+            RtRepo-->>UseCase: stored token | undefined
+
+            alt token not found
+                UseCase-->>Controller: throws AuthenticationError
+                Controller-->>Client: 401 Unauthorized
+            else token already rotated away (revokedAt set)
+                alt rotated more than 5 s ago — reuse detected
+                    UseCase->>RtRepo: revokeRefreshTokenFamily({ familyId })
+                    note right of RtRepo: revokes every token descended<br/>from the same original login,<br/>not just the reused one
+                else rotated within the 5 s grace window — concurrent refresh
+                    note right of UseCase: rejected, family left intact
+                end
+                UseCase-->>Controller: throws AuthenticationError
+                Controller-->>Client: 401 Unauthorized
+            else token expired (never revoked)
+                UseCase-->>Controller: throws AuthenticationError
+                Controller-->>Client: 401 Unauthorized
+            else token valid
+                UseCase->>RtRepo: revokeRefreshToken({ id })
+                note right of RtRepo: UPDATE … WHERE id = $1<br/>AND revoked_at IS NULL
+                RtRepo-->>UseCase: revoked (true | false)
+                alt false — a concurrent request rotated it first
+                    UseCase-->>Controller: throws AuthenticationError
+                    Controller-->>Client: 401 Unauthorized
+                end
+                UseCase->>Jwt: generate({ key: userId, 15m })
+                Jwt-->>UseCase: accessToken
+                UseCase->>RtRepo: saveRefreshToken({ userId, newTokenHash, familyId, 7d })
+                note right of RtRepo: same familyId carried forward
+                UseCase-->>Controller: { accessToken, refreshToken }
+                Controller-->>Client: 200 { accessToken, refreshToken }
+            end
+        end
+    end

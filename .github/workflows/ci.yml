@@ -1,0 +1,153 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  quality:
+    name: Quality (Lint/Format, Typecheck, Security, Build)
+    runs-on: ubuntu-latest
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint and format check
+        run: npm run lint
+
+      - name: Typecheck (src and tests)
+        run: npm run typecheck
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+
+      # Advisory; skipped without the SNYK_TOKEN secret
+      - name: Run Snyk security scan
+        if: env.SNYK_TOKEN != ''
+        uses: snyk/actions/node@v1.0.0
+        continue-on-error: true
+        with:
+          args: --severity-threshold=high
+
+      - name: Build
+        run: npm run build
+
+  verify:
+    name: Verify (Tests, Integration, Docker, API collection)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Includes the E2E route tests
+      - name: Unit and E2E tests with the 100% coverage gate (jest.config.js)
+        run: npm run test:coverage
+        env:
+          NODE_ENV: test
+          JWT_SECRET: test_secret_key_for_ci
+          FB_CLIENT_ID: test_fb_client_id
+          FB_CLIENT_SECRET: test_fb_client_secret
+          S3_ACCESS_KEY_ID: test_aws_access_key
+          S3_SECRET_ACCESS_KEY: test_aws_secret
+          S3_BUCKET: test-bucket
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Start PostgreSQL and S3Mock
+        run: |
+          docker compose up -d --wait postgres s3mock
+          for _ in $(seq 1 30); do curl -sf http://localhost:9090/ > /dev/null && exit 0; sleep 1; done
+          echo "S3Mock did not start"; exit 1
+
+      - name: Run PostgreSQL tests (real database, concurrency and constraints)
+        run: npm run test:pg
+
+      - name: Check entities and migrations are in sync
+        run: npm run migration:check
+        env:
+          DB_DATABASE: authkit_test
+
+      - name: Run S3 adapter tests against S3Mock
+        run: npm run test:s3
+        env:
+          S3_ENDPOINT: http://localhost:9090
+          S3_FORCE_PATH_STYLE: 'true'
+          S3_BUCKET: authkit-pictures
+          S3_ACCESS_KEY_ID: local
+          S3_SECRET_ACCESS_KEY: local
+
+      - name: Build app image and start stack
+        run: docker compose up -d --build app
+        env:
+          # The collection exceeds the default auth limit; the limits are covered by the route tests
+          RATE_LIMIT_PER_MINUTE: '1000'
+          AUTH_RATE_LIMIT_PER_MINUTE: '1000'
+
+      - name: Wait for app health check
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/health > /dev/null; then
+              echo "App is healthy"
+              exit 0
+            fi
+            echo "Waiting for app... ($i)"
+            sleep 2
+          done
+          echo "App did not become healthy in time"
+          exit 1
+
+      - name: Seed fixture data
+        run: docker compose exec -T app npm run db:seed
+
+      - name: Run API collection tests
+        run: npm run test:api
+
+      - name: Production mode refuses to start without real secrets
+        run: |
+          set +e
+          timeout 60 docker run --rm -e NODE_ENV=production authkit-clean-arch:local
+          status=$?
+          set -e
+          if [ "$status" -ne 1 ]; then
+            echo "Expected env validation to exit with status 1, got $status"
+            exit 1
+          fi
+          echo "Fail-fast env validation works"
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose down -v

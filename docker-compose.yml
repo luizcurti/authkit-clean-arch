@@ -1,0 +1,120 @@
+# Local development stack. NODE_ENV=development boots without secrets; with NODE_ENV=production
+# they are required (from an optional .env). Pictures go to S3Mock. Seed with:
+#   docker compose exec app npm run db:seed
+
+x-app-image: &app-image
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: authkit-clean-arch:local
+  env_file:
+    - path: .env
+      required: false
+  environment: &app-env
+    NODE_ENV: ${NODE_ENV:-development}
+    PORT: 8080
+    DB_HOST: postgres
+    DB_PORT: 5432
+    DB_USER: ${DB_USER:-postgres}
+    DB_PASSWORD: ${DB_PASSWORD:-postgres}
+    DB_DATABASE: ${DB_DATABASE:-authkit_db}
+    S3_ENDPOINT: http://s3mock:9090
+    S3_FORCE_PATH_STYLE: "true"
+    S3_BUCKET: authkit-pictures
+    S3_REGION: us-east-1
+    S3_ACCESS_KEY_ID: local
+    S3_SECRET_ACCESS_KEY: local
+    # Reachable from the host, unlike the s3mock hostname
+    S3_PUBLIC_BASE_URL: http://localhost:9090/authkit-pictures
+    OUTBOX_POLL_INTERVAL_SECONDS: ${OUTBOX_POLL_INTERVAL_SECONDS:-1}
+    # The Postman run needs higher limits (see README)
+    RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-100}
+    AUTH_RATE_LIMIT_PER_MINUTE: ${AUTH_RATE_LIMIT_PER_MINUTE:-10}
+  networks:
+    - authkit-network
+
+services:
+  # One-shot: apply pending migrations, then exit
+  migrate:
+    <<: *app-image
+    container_name: authkit-migrate
+    command: ["npm", "run", "migration:run:prod"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    <<: *app-image
+    container_name: authkit-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      s3mock:
+        condition: service_started
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: authkit-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-authkit_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - authkit-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # S3-compatible emulator
+  s3mock:
+    image: adobe/s3mock:5.2.3
+    container_name: authkit-s3mock
+    restart: unless-stopped
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: authkit-pictures
+    ports:
+      - "9090:9090"
+    networks:
+      - authkit-network
+
+  # PgAdmin (optional DB UI): docker compose --profile tools up
+  pgadmin:
+    image: dpage/pgadmin4:9.18
+    container_name: authkit-pgadmin
+    profiles: ["tools"]
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@authkit.dev
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "8081:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - authkit-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  authkit-network:
+    driver: bridge
