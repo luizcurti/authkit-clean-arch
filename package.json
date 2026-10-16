@@ -96,7 +96,7 @@
     "pg": "^8.23.0",
     "reflect-metadata": "^0.2.2",
     "swagger-ui-express": "^5.0.1",
-    "typeorm": "^1.1.1",
+    "typeorm": "^1.1.2",
     "winston": "^3.19.0",
     "zod": "^4.6.5"
   },
