@@ -2,7 +2,7 @@
 
 Architecture and flow diagrams for AuthKit. Sources live in [`mmd/`](./mmd) (Mermaid), rendered PNGs in [`img/`](./img). The Postman collection lives in [`api/`](./api). The rationale behind each non-obvious engineering decision is recorded as an ADR in [`adr/`](./adr/README.md).
 
-Written guides: [architecture](./architecture.md) · [development](./development.md) · [operations](./operations.md).
+Written guides: [architecture](./architecture.md) · [development](./development.md) · [operations](./operations.md) · [deployment (AWS)](./deployment.md).
 
 ## Architecture overview (top-level, in the root README)
 

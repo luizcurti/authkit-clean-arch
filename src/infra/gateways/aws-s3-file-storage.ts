@@ -3,8 +3,9 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } fro
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 export type AwsS3FileStorageConfig = {
-  accessKey: string
-  secret: string
+  // Unset = the AWS SDK's default credential chain (e.g. an ECS task role)
+  accessKey?: string
+  secret?: string
   bucket: string
   region: string
   // S3-compatible endpoint (S3Mock). Unset = AWS
@@ -24,10 +25,9 @@ export class AwsS3FileStorage implements UploadFile, DeleteFile, GetFileUrl {
   constructor (private readonly config: AwsS3FileStorageConfig) {
     this.s3Client = new S3Client({
       region: config.region,
-      credentials: {
-        accessKeyId: config.accessKey,
-        secretAccessKey: config.secret
-      },
+      ...(config.accessKey !== undefined && config.secret !== undefined && {
+        credentials: { accessKeyId: config.accessKey, secretAccessKey: config.secret }
+      }),
       ...(config.endpoint !== undefined && { endpoint: config.endpoint }),
       ...(config.forcePathStyle === true && { forcePathStyle: true })
     })

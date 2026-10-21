@@ -26,11 +26,12 @@ const envSchema = z.object({
   JWT_ISSUER: z.string().min(1).default('authkit-clean-arch'),
   JWT_AUDIENCE: z.string().min(1).default('authkit-clean-arch-api'),
 
+  // Optional in production: unset = the AWS SDK's default credential chain (e.g. an ECS task role)
   S3_ACCESS_KEY_ID: isProduction
-    ? z.string().min(1, 'S3_ACCESS_KEY_ID is required in production')
+    ? z.string().optional()
     : z.string().default('test_s3_access_key'),
   S3_SECRET_ACCESS_KEY: isProduction
-    ? z.string().min(1, 'S3_SECRET_ACCESS_KEY is required in production')
+    ? z.string().optional()
     : z.string().default('test_s3_secret_key'),
   S3_BUCKET: isProduction
     ? z.string().min(1, 'S3_BUCKET is required in production')
@@ -63,6 +64,15 @@ const envSchema = z.object({
 
   // 0 disables the in-process outbox worker (npm run outbox:process runs it externally)
   OUTBOX_POLL_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(10)
+}).superRefine((value, ctx) => {
+  // Half a key pair would silently fall back to the default credential chain
+  if ((value.S3_ACCESS_KEY_ID === undefined) !== (value.S3_SECRET_ACCESS_KEY === undefined)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['S3_ACCESS_KEY_ID'],
+      message: 'S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together'
+    })
+  }
 })
 
 const emptyToUndefined = (value?: string): string | undefined => value === '' ? undefined : value
@@ -80,8 +90,8 @@ const rawEnv = {
   JWT_SECRET: process.env.JWT_SECRET,
   JWT_ISSUER: process.env.JWT_ISSUER,
   JWT_AUDIENCE: process.env.JWT_AUDIENCE,
-  S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID,
-  S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY,
+  S3_ACCESS_KEY_ID: emptyToUndefined(process.env.S3_ACCESS_KEY_ID),
+  S3_SECRET_ACCESS_KEY: emptyToUndefined(process.env.S3_SECRET_ACCESS_KEY),
   S3_BUCKET: process.env.S3_BUCKET,
   S3_REGION: process.env.S3_REGION,
   S3_ENDPOINT: emptyToUndefined(process.env.S3_ENDPOINT),
