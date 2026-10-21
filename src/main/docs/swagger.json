@@ -1,0 +1,807 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "AuthKit API",
+    "description": "Production-oriented authentication API built with Clean Architecture and TDD — Facebook OAuth, JWT access tokens with refresh-token rotation, and S3-backed profile pictures.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Support",
+      "email": "support@example.com"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080/api",
+      "description": "Development server"
+    },
+    {
+      "url": "https://api.example.com/api",
+      "description": "Production server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "Authentication endpoints"
+    },
+    {
+      "name": "User",
+      "description": "User endpoints"
+    },
+    {
+      "name": "Health",
+      "description": "Health check endpoints"
+    }
+  ],
+  "paths": {
+    "/login/facebook": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Login with Facebook",
+        "description": "Authenticate user using a Facebook OAuth token. Issues a short-lived access token (15 min) and a refresh token (7 days). Rate limited to 10 requests/min/IP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FacebookLoginRequest"
+              },
+              "example": {
+                "token": "EAABwzLixnjYBO..."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successfully executed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FacebookLoginResponse"
+                },
+                "example": {
+                  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "refreshToken": "rt_9c1b6e2a-3f4d-4b7a-9c2e-1a2b3c4d5e6f"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "description": "Invalid Facebook token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "requestId": "b1e6c8b0-..."
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "502": {
+            "description": "The Facebook Graph API is unavailable (timeout, network error, or 5xx) after retries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "An upstream service failed to respond",
+                  "requestId": "b1e6c8b0-..."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/login/refresh": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Refresh access token",
+        "description": "Exchanges a valid refresh token for a new access token and refresh token (rotation). The previous refresh token is revoked — reusing it returns 401. Rate limited to 10 requests/min/IP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              },
+              "example": {
+                "refreshToken": "rt_9c1b6e2a-3f4d-4b7a-9c2e-1a2b3c4d5e6f"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New access token and refresh token issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshTokenResponse"
+                },
+                "example": {
+                  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                  "refreshToken": "rt_1f2e3d4c-5b6a-4978-8e7f-0a1b2c3d4e5f"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "401": {
+            "description": "Refresh token is unknown, expired, or already rotated/revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "unauthorized",
+                  "requestId": "b1e6c8b0-..."
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/logout": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Log out (revoke the session)",
+        "description": "Revokes the refresh token's whole token family, so no token rotated from the same login can be used again. Access tokens already issued stay valid until they expire (15 min). Always returns 204 for a well-formed request, whether or not the token exists, so the endpoint cannot be used to probe tokens. Rate limited to 10 requests/min/IP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              },
+              "example": {
+                "refreshToken": "rt_9c1b6e2a-3f4d-4b7a-9c2e-1a2b3c4d5e6f"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Session revoked (or the token was unknown)"
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/users/picture": {
+      "put": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Update profile picture",
+        "description": "Upload user's profile picture (PNG or JPG, max 5MB). The file's magic bytes are validated against the declared MIME type to reject spoofed content. The previous picture, if any, is deleted from storage.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "picture": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Image file (PNG or JPG)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Picture updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavePictureResponse"
+                },
+                "example": {
+                  "pictureUrl": "https://cdn.example.com/42_9c1b6e2a-3f4d-4b7a-9c2e-1a2b3c4d5e6f.jpeg"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid upload: no file, a file under another field name or more than one, wrong MIME type, empty, over 5MB, content that isn't the declared type, or a malformed multipart body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Unsupported type. Allowed types: png, jpg",
+                  "requestId": "b1e6c8b0-..."
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/BearerUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/UserNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Remove profile picture",
+        "description": "Removes user's profile picture and returns initials. The stored object is deleted shortly after, once the change is committed",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Picture removed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavePictureResponse"
+                },
+                "example": {
+                  "initials": "JD"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/BearerUnauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/UserNotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Basic health check",
+        "description": "Checks basic application status",
+        "responses": {
+          "200": {
+            "description": "Application is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthCheckResponse"
+                },
+                "example": {
+                  "status": "ok",
+                  "timestamp": "2025-11-10T22:00:00.000Z",
+                  "uptime": 3600,
+                  "environment": "production",
+                  "version": "1.0.0",
+                  "memory": {
+                    "used": 45.23,
+                    "total": 128.5
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/detailed": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Detailed health check",
+        "description": "Checks detailed status including database, memory and system. Operational endpoint: requires `Authorization: Bearer <OPS_TOKEN>` when OPS_TOKEN is set; disabled (404) in production when it is not.",
+        "security": [
+          {
+            "opsToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detailed application status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdvancedHealthCheckResponse"
+                },
+                "example": {
+                  "status": "healthy",
+                  "timestamp": "2025-11-10T22:00:00.000Z",
+                  "uptime": 3600,
+                  "environment": "production",
+                  "version": "1.0.0",
+                  "checks": {
+                    "database": {
+                      "status": "up",
+                      "responseTime": 15
+                    },
+                    "memory": {
+                      "status": "normal",
+                      "used": 45.23,
+                      "total": 128.5,
+                      "percentage": 35
+                    },
+                    "system": {
+                      "platform": "linux",
+                      "nodeVersion": "v24.0.0",
+                      "processId": 1234
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/OpsUnauthorized"
+          },
+          "404": {
+            "description": "Disabled: production without OPS_TOKEN"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Prometheus metrics",
+        "description": "Exposes request duration histogram and request counter metrics in Prometheus text format. Operational endpoint: requires `Authorization: Bearer <OPS_TOKEN>` when OPS_TOKEN is set; disabled (404) in production when it is not.",
+        "security": [
+          {
+            "opsToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Metrics in Prometheus exposition format",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "# HELP http_requests_total Total number of HTTP requests\n# TYPE http_requests_total counter\nhttp_requests_total{method=\"GET\",route=\"/health\",status_code=\"200\"} 1"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/OpsUnauthorized"
+          },
+          "404": {
+            "description": "Disabled: production without OPS_TOKEN"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT access token obtained from a login/refresh endpoint"
+      },
+      "opsToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Static operations token (OPS_TOKEN) for metrics and detailed health"
+      }
+    },
+    "responses": {
+      "OpsUnauthorized": {
+        "description": "Missing or wrong ops token",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "unauthorized",
+              "requestId": "b1e6c8b0-..."
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Missing field, a field of the wrong type (e.g. a number instead of a string), or a malformed JSON body",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "The field token is required",
+              "requestId": "b1e6c8b0-..."
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "The profile picture was changed by another request after this one read it. Nothing was saved; retry",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "The resource was modified by another request. Retry",
+              "requestId": "b1e6c8b0-..."
+            }
+          }
+        }
+      },
+      "BearerUnauthorized": {
+        "description": "Missing, malformed, expired or invalid access token (RFC 6750)",
+        "headers": {
+          "WWW-Authenticate": {
+            "description": "`Bearer` when no token was sent, `Bearer error=\"invalid_token\"` when the token was rejected",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "unauthorized",
+              "requestId": "b1e6c8b0-..."
+            }
+          }
+        }
+      },
+      "PayloadTooLarge": {
+        "description": "JSON body larger than 100 KB",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Request body too large",
+              "requestId": "b1e6c8b0-..."
+            }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "Rate limit exceeded for this endpoint/IP",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Too many login attempts, please try again later"
+            }
+          }
+        }
+      },
+      "UserNotFound": {
+        "description": "The access token is valid but its user no longer exists. Nothing was stored",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "User not found",
+              "requestId": "b1e6c8b0-..."
+            }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Unexpected failure (database, storage). Never carries internal details",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Server failed. Try again later",
+              "requestId": "b1e6c8b0-..."
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "FacebookLoginRequest": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Facebook OAuth access token",
+            "example": "EAABwzLixnjYBO..."
+          }
+        }
+      },
+      "FacebookLoginResponse": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT access token for API authentication (expires in 15 min)",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Opaque refresh token (expires in 7 days, single use — rotated on each refresh)",
+            "example": "rt_9c1b6e2a-3f4d-4b7a-9c2e-1a2b3c4d5e6f"
+          }
+        }
+      },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "required": [
+          "refreshToken"
+        ],
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "A previously issued, non-expired, non-revoked refresh token",
+            "example": "rt_9c1b6e2a-3f4d-4b7a-9c2e-1a2b3c4d5e6f"
+          }
+        }
+      },
+      "RefreshTokenResponse": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "New JWT access token (expires in 15 min)",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "New refresh token — the previous one is revoked",
+            "example": "rt_1f2e3d4c-5b6a-4978-8e7f-0a1b2c3d4e5f"
+          }
+        }
+      },
+      "SavePictureResponse": {
+        "type": "object",
+        "properties": {
+          "pictureUrl": {
+            "type": "string",
+            "description": "URL of the uploaded picture: S3_PUBLIC_BASE_URL (e.g. CloudFront) + key when configured, otherwise a pre-signed S3 URL valid for 1 hour. Only returned on upload.",
+            "example": "https://cdn.example.com/42_9c1b6e2a-3f4d-4b7a-9c2e-1a2b3c4d5e6f.jpeg"
+          },
+          "initials": {
+            "type": "string",
+            "description": "User initials (when there is no picture)",
+            "example": "JD"
+          }
+        }
+      },
+      "HealthCheckResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ],
+            "description": "Application status"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Health check timestamp"
+          },
+          "uptime": {
+            "type": "number",
+            "description": "Uptime in seconds"
+          },
+          "environment": {
+            "type": "string",
+            "description": "Environment (development, production, etc)"
+          },
+          "version": {
+            "type": "string",
+            "description": "Application version"
+          },
+          "memory": {
+            "type": "object",
+            "properties": {
+              "used": {
+                "type": "number",
+                "description": "Memory used in MB"
+              },
+              "total": {
+                "type": "number",
+                "description": "Total memory in MB"
+              }
+            }
+          }
+        }
+      },
+      "AdvancedHealthCheckResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "degraded",
+              "unhealthy"
+            ],
+            "description": "Overall application status"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uptime": {
+            "type": "number"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "checks": {
+            "type": "object",
+            "properties": {
+              "database": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "up",
+                      "down"
+                    ]
+                  },
+                  "responseTime": {
+                    "type": "number",
+                    "description": "Response time in ms"
+                  },
+                  "error": {
+                    "type": "string",
+                    "description": "Error message (if down)"
+                  }
+                }
+              },
+              "memory": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "normal",
+                      "warning",
+                      "critical"
+                    ]
+                  },
+                  "used": {
+                    "type": "number"
+                  },
+                  "total": {
+                    "type": "number"
+                  },
+                  "percentage": {
+                    "type": "number"
+                  }
+                }
+              },
+              "system": {
+                "type": "object",
+                "properties": {
+                  "platform": {
+                    "type": "string"
+                  },
+                  "nodeVersion": {
+                    "type": "string"
+                  },
+                  "processId": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable error message"
+          },
+          "requestId": {
+            "type": "string",
+            "description": "Correlation id for this request (echoes the X-Request-Id request header, or a generated one)"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1990 @@
+{
+  "info": {
+    "name": "AuthKit API",
+    "description": "Runnable contract suite for every endpoint: the success path and every error path (validation, authentication, not found, conflicts, payload limits).\n\nRun it with `npm run test:api` against the docker-compose stack started with raised rate limits (`RATE_LIMIT_PER_MINUTE=1000 AUTH_RATE_LIMIT_PER_MINUTE=1000 docker compose up -d`, the collection sends more auth requests than the default 10 per minute) after `docker compose exec app npm run db:seed`. Before the run, the runner signs the access tokens (valid, expired, another audience, unknown user), seeds refresh tokens for the seeded user (id=1, \"Loro\") straight into the database, generates the oversized upload, and sets the working directory to `docs/api`, where the fixtures live.\n\nEvery response is checked for an `X-Request-Id`, and every error for the `{ error, requestId }` shape (collection-level test). Requests run in order: the refresh, logout and picture requests share state.\n\nNot covered here: a successful Facebook login, which needs a real Facebook token (covered by the route tests, with Facebook stubbed), and responses that need the server to fail (5xx, 409 races), covered by the route and PostgreSQL tests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "exec": [
+          "pm.test('response carries an X-Request-Id', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.be.a('string').and.not.empty)",
+          "const isApiError = pm.response.code >= 400 && (pm.response.headers.get('Content-Type') || '').includes('application/json')",
+          "if (isApiError) {",
+          "  pm.test('error body is exactly { error, requestId }', () => pm.expect(Object.keys(pm.response.json()).sort()).to.eql(['error', 'requestId']))",
+          "  pm.test('error requestId matches the header', () => pm.expect(pm.response.json().requestId).to.eql(pm.response.headers.get('X-Request-Id')))",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "expiredAccessToken",
+      "value": ""
+    },
+    {
+      "key": "otherAudienceAccessToken",
+      "value": ""
+    },
+    {
+      "key": "unknownUserAccessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "expiredRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "rotatedRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "rotatedSiblingRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080/api"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Basic health check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health",
+            "header": []
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('status is ok', () => pm.expect(pm.response.json().status).to.eql('ok'))",
+                  "pm.test('body has exactly environment, memory, status, timestamp, uptime, version', () => pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"environment\", \"memory\", \"status\", \"timestamp\", \"uptime\", \"version\"]))",
+                  "pm.test('timestamp is ISO 8601', () => pm.expect(new Date(pm.response.json().timestamp).toISOString()).to.eql(pm.response.json().timestamp))",
+                  "pm.test('memory is reported in MB', () => { const { memory } = pm.response.json(); pm.expect(memory.used).to.be.above(0); pm.expect(memory.total).to.be.at.least(memory.used) })"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detailed health check (open outside production)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health/detailed",
+            "header": []
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('body has exactly checks, environment, status, timestamp, uptime, version', () => pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"checks\", \"environment\", \"status\", \"timestamp\", \"uptime\", \"version\"]))",
+                  "pm.test('database check is up', () => pm.expect(pm.response.json().checks.database.status).to.eql('up'))",
+                  "pm.test('database latency is measured', () => pm.expect(pm.response.json().checks.database.responseTime).to.be.a('number'))",
+                  "pm.test('overall status is healthy or degraded', () => pm.expect(['healthy', 'degraded']).to.include(pm.response.json().status))",
+                  "pm.test('memory and system checks are present', () => { const { memory, system } = pm.response.json().checks; pm.expect(['normal', 'warning', 'critical']).to.include(memory.status); pm.expect(system.nodeVersion).to.match(/^v\\d+/) })"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Prometheus metrics (open outside production)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/metrics",
+            "header": []
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('Prometheus text format', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain'))",
+                  "pm.test('exposes http_requests_total', () => pm.expect(pm.response.text()).to.include('http_requests_total'))",
+                  "pm.test('labels requests by route pattern', () => pm.expect(pm.response.text()).to.include('route=\"/api/health\"'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Health check with an unsupported method (404)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/health",
+            "header": []
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404))",
+                  "pm.test('error is \"Not found\"', () => pm.expect(pm.response.json().error).to.eql(\"Not found\"))"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Login",
+      "item": [
+        {
+          "name": "Login with invalid Facebook token (auth failure)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/facebook",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"token\": \"invalid_facebook_token\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('error is \"unauthorized\"', () => pm.expect(pm.response.json().error).to.eql(\"unauthorized\"))",
+                  "pm.test('no WWW-Authenticate challenge', () => pm.expect(pm.response.headers.has('WWW-Authenticate')).to.eql(false))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login with token missing (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/facebook",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field token is required\"', () => pm.expect(pm.response.json().error).to.eql(\"The field token is required\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login with token null (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/facebook",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"token\": null}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field token is required\"', () => pm.expect(pm.response.json().error).to.eql(\"The field token is required\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login with token an empty string (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/facebook",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"token\": \"\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field token is required\"', () => pm.expect(pm.response.json().error).to.eql(\"The field token is required\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login with token a number (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/facebook",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"token\": 123}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field token must be a string\"', () => pm.expect(pm.response.json().error).to.eql(\"The field token must be a string\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login with token an object (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/facebook",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"token\": {\"value\": \"x\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field token must be a string\"', () => pm.expect(pm.response.json().error).to.eql(\"The field token must be a string\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login with a form-encoded body, which is not read (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/facebook",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "token=any"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field token is required\"', () => pm.expect(pm.response.json().error).to.eql(\"The field token is required\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login with a malformed JSON body",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/facebook",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"token\":"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"Malformed JSON body\"', () => pm.expect(pm.response.json().error).to.eql(\"Malformed JSON body\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login with a body over 100 KB",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/facebook",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.request.body.update(JSON.stringify({ token: 'x'.repeat(200 * 1024) }))"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 413', () => pm.response.to.have.status(413))",
+                  "pm.test('error is \"Request body too large\"', () => pm.expect(pm.response.json().error).to.eql(\"Request body too large\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login with GET, which is not routed (404)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/login/facebook",
+            "header": []
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404))",
+                  "pm.test('error is \"Not found\"', () => pm.expect(pm.response.json().error).to.eql(\"Not found\"))"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Refresh and logout",
+      "item": [
+        {
+          "name": "Refresh with a valid refreshToken (rotates it)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/refresh",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": \"{{refreshToken}}\"}"
+            },
+            "description": "refreshToken is seeded for user 1 by npm run test:api. The rotated pair is stored back for the next requests."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('body has exactly accessToken, refreshToken', () => pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"accessToken\", \"refreshToken\"]))",
+                  "pm.test('refresh token is rt_<uuid>', () => pm.expect(pm.response.json().refreshToken).to.match(/^rt_[0-9a-f-]{36}$/))",
+                  "pm.test('returns a different refresh token', () => pm.expect(pm.response.json().refreshToken).to.not.eql(pm.variables.get('refreshToken')))",
+                  "pm.environment.set('replacedRefreshToken', pm.variables.get('refreshToken'))",
+                  "pm.environment.set('refreshToken', pm.response.json().refreshToken)",
+                  "pm.environment.set('refreshedAccessToken', pm.response.json().accessToken)"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The refreshed access token authorizes the user",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{refreshedAccessToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('acts on the seeded user', () => pm.expect(pm.response.json().initials).to.eql('L'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replaying the replaced refreshToken right away (401, concurrent refresh)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/refresh",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": \"{{replacedRefreshToken}}\"}"
+            },
+            "description": "Within the 5 s grace window a replay counts as a concurrent refresh: rejected, but the session survives (next request)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('error is \"unauthorized\"', () => pm.expect(pm.response.json().error).to.eql(\"unauthorized\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The session survives a replay within the grace window",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/refresh",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": \"{{refreshToken}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('body has exactly accessToken, refreshToken', () => pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"accessToken\", \"refreshToken\"]))",
+                  "pm.test('refresh token is rt_<uuid>', () => pm.expect(pm.response.json().refreshToken).to.match(/^rt_[0-9a-f-]{36}$/))",
+                  "pm.environment.set('refreshToken', pm.response.json().refreshToken)"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Replaying a refreshToken rotated a minute ago (401, theft)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/refresh",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": \"{{rotatedRefreshToken}}\"}"
+            },
+            "description": "Past the grace window a replay is treated as theft: the whole session (token family) is revoked."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('error is \"unauthorized\"', () => pm.expect(pm.response.json().error).to.eql(\"unauthorized\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The rest of that session is revoked too (401)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/refresh",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": \"{{rotatedSiblingRefreshToken}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('error is \"unauthorized\"', () => pm.expect(pm.response.json().error).to.eql(\"unauthorized\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh with an expired refreshToken (401)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/refresh",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": \"{{expiredRefreshToken}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('error is \"unauthorized\"', () => pm.expect(pm.response.json().error).to.eql(\"unauthorized\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh with unknown refreshToken (auth failure)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/refresh",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": \"rt_unknown\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('error is \"unauthorized\"', () => pm.expect(pm.response.json().error).to.eql(\"unauthorized\"))",
+                  "pm.test('no WWW-Authenticate challenge', () => pm.expect(pm.response.headers.has('WWW-Authenticate')).to.eql(false))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh with refreshToken missing (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/refresh",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field refreshToken is required\"', () => pm.expect(pm.response.json().error).to.eql(\"The field refreshToken is required\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh with refreshToken null (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/refresh",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": null}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field refreshToken is required\"', () => pm.expect(pm.response.json().error).to.eql(\"The field refreshToken is required\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh with refreshToken an empty string (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/refresh",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": \"\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field refreshToken is required\"', () => pm.expect(pm.response.json().error).to.eql(\"The field refreshToken is required\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh with refreshToken a number (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/refresh",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": 123}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field refreshToken must be a string\"', () => pm.expect(pm.response.json().error).to.eql(\"The field refreshToken must be a string\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh with refreshToken an object (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/refresh",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": {\"value\": \"x\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field refreshToken must be a string\"', () => pm.expect(pm.response.json().error).to.eql(\"The field refreshToken must be a string\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout (204, ends the session)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/logout",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": \"{{refreshToken}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 204', () => pm.response.to.have.status(204))",
+                  "pm.test('empty body', () => pm.expect(pm.response.text()).to.eql(''))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh after logout (401)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/login/refresh",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": \"{{refreshToken}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('error is \"unauthorized\"', () => pm.expect(pm.response.json().error).to.eql(\"unauthorized\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout again (204, idempotent)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/logout",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": \"{{refreshToken}}\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 204', () => pm.response.to.have.status(204))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout with an unknown refreshToken (204, existence is not revealed)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/logout",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": \"rt_unknown\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 204', () => pm.response.to.have.status(204))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout with refreshToken missing (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/logout",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field refreshToken is required\"', () => pm.expect(pm.response.json().error).to.eql(\"The field refreshToken is required\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout with refreshToken null (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/logout",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": null}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field refreshToken is required\"', () => pm.expect(pm.response.json().error).to.eql(\"The field refreshToken is required\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout with refreshToken an empty string (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/logout",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": \"\"}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field refreshToken is required\"', () => pm.expect(pm.response.json().error).to.eql(\"The field refreshToken is required\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout with refreshToken a number (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/logout",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": 123}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field refreshToken must be a string\"', () => pm.expect(pm.response.json().error).to.eql(\"The field refreshToken must be a string\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout with refreshToken an object (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/logout",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"refreshToken\": {\"value\": \"x\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field refreshToken must be a string\"', () => pm.expect(pm.response.json().error).to.eql(\"The field refreshToken must be a string\"))"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "User picture",
+      "item": [
+        {
+          "name": "Delete picture without auth header (Bearer challenge)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/picture",
+            "header": []
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('WWW-Authenticate: Bearer', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql(\"Bearer\"))",
+                  "pm.test('error is \"unauthorized\"', () => pm.expect(pm.response.json().error).to.eql(\"unauthorized\"))",
+                  "pm.test('error body carries the request id', () => pm.expect(pm.response.json().requestId).to.eql(pm.response.headers.get('X-Request-Id')))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete picture with another auth scheme",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjpwYXNz"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('WWW-Authenticate: Bearer', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql(\"Bearer\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete picture with a valid token but no Bearer scheme",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{accessToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('WWW-Authenticate: Bearer', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql(\"Bearer\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete picture with an invalid token",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer invalid_token"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('WWW-Authenticate: Bearer error=\"invalid_token\"', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql(\"Bearer error=\\\"invalid_token\\\"\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete picture with an expired token",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{expiredAccessToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('WWW-Authenticate: Bearer error=\"invalid_token\"', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql(\"Bearer error=\\\"invalid_token\\\"\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete picture with a token for another audience",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherAudienceAccessToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('WWW-Authenticate: Bearer error=\"invalid_token\"', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql(\"Bearer error=\\\"invalid_token\\\"\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete picture for a user that does not exist (404)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{unknownUserAccessToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404))",
+                  "pm.test('error is \"User not found\"', () => pm.expect(pm.response.json().error).to.eql(\"User not found\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete picture with valid token (returns initials)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('body is exactly the initials of the seeded user', () => pm.expect(pm.response.json()).to.eql({ initials: 'L' }))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete picture with the scheme in lowercase",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "bearer {{accessToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload picture without auth header (Bearer challenge)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/avatar.png",
+                  "contentType": "image/png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('WWW-Authenticate: Bearer', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql(\"Bearer\"))",
+                  "pm.test('error is \"unauthorized\"', () => pm.expect(pm.response.json().error).to.eql(\"unauthorized\"))",
+                  "pm.test('error body carries the request id', () => pm.expect(pm.response.json().requestId).to.eql(pm.response.headers.get('X-Request-Id')))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload picture with another auth scheme",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Basic dXNlcjpwYXNz"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/avatar.png",
+                  "contentType": "image/png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('WWW-Authenticate: Bearer', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql(\"Bearer\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload picture with a valid token but no Bearer scheme",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/avatar.png",
+                  "contentType": "image/png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('WWW-Authenticate: Bearer', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql(\"Bearer\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload picture with an invalid token",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer invalid_token"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/avatar.png",
+                  "contentType": "image/png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('WWW-Authenticate: Bearer error=\"invalid_token\"', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql(\"Bearer error=\\\"invalid_token\\\"\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload picture with an expired token",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{expiredAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/avatar.png",
+                  "contentType": "image/png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('WWW-Authenticate: Bearer error=\"invalid_token\"', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql(\"Bearer error=\\\"invalid_token\\\"\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload picture with a token for another audience",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{otherAudienceAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/avatar.png",
+                  "contentType": "image/png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401))",
+                  "pm.test('WWW-Authenticate: Bearer error=\"invalid_token\"', () => pm.expect(pm.response.headers.get('WWW-Authenticate')).to.eql(\"Bearer error=\\\"invalid_token\\\"\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload picture for a user that does not exist (404)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{unknownUserAccessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/avatar.png",
+                  "contentType": "image/png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404))",
+                  "pm.test('error is \"User not found\"', () => pm.expect(pm.response.json().error).to.eql(\"User not found\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload picture with no file (validation error)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"The field file is required\"', () => pm.expect(pm.response.json().error).to.eql(\"The field file is required\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload picture with unsupported mime type (validation error)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/not-allowed.gif",
+                  "contentType": "image/gif"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"Unsupported type. Allowed types: png, jpg\"', () => pm.expect(pm.response.json().error).to.eql(\"Unsupported type. Allowed types: png, jpg\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload text declared as PNG (400)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/text-as-image.png",
+                  "contentType": "image/png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"File content does not match its declared type\"', () => pm.expect(pm.response.json().error).to.eql(\"File content does not match its declared type\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload a JPEG declared as PNG (400)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/avatar.jpg",
+                  "contentType": "image/png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"File content does not match its declared type\"', () => pm.expect(pm.response.json().error).to.eql(\"File content does not match its declared type\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload a file over 5 MB (400)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/generated/too-large.png",
+                  "contentType": "image/png"
+                }
+              ]
+            },
+            "description": "The fixture is generated by npm run test:api."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"File too large. Maximum size is 5MB.\"', () => pm.expect(pm.response.json().error).to.eql(\"File too large. Maximum size is 5MB.\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload under another field name (400)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "photo",
+                  "type": "file",
+                  "src": "fixtures/avatar.png",
+                  "contentType": "image/png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 400', () => pm.response.to.have.status(400))",
+                  "pm.test('error is \"Invalid upload: Unexpected file field\"', () => pm.expect(pm.response.json().error).to.eql(\"Invalid upload: Unexpected file field\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload a valid JPG (stored as JPEG, URL serves it)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/avatar.jpg",
+                  "contentType": "image/jpeg"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('body has exactly pictureUrl', () => pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"pictureUrl\"]))",
+                  "const { pictureUrl } = pm.response.json()",
+                  "pm.test('key is <user>_<uuid>.jpeg', () => pm.expect(pictureUrl).to.match(/\\/1_[0-9a-f-]{36}\\.jpeg$/))",
+                  "pm.environment.set('pictureUrl', pictureUrl)",
+                  "pm.test('returns a URL that serves the uploaded image', done => {",
+                  "  pm.sendRequest(pictureUrl, (error, image) => {",
+                  "    pm.expect(error).to.eql(null)",
+                  "    pm.expect(image.code).to.eql(200)",
+                  "    pm.expect(image.headers.get('Content-Type')).to.eql('image/jpeg')",
+                  "    done()",
+                  "  })",
+                  "})"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload a valid PNG (stored, URL serves it)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/avatar.png",
+                  "contentType": "image/png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "const { pictureUrl } = pm.response.json()",
+                  "pm.environment.set('pictureUrl', pictureUrl)",
+                  "pm.test('returns a URL that serves the uploaded image', done => {",
+                  "  pm.sendRequest(pictureUrl, (error, image) => {",
+                  "    pm.expect(error).to.eql(null)",
+                  "    pm.expect(image.code).to.eql(200)",
+                  "    pm.expect(image.headers.get('Content-Type')).to.eql('image/png')",
+                  "    done()",
+                  "  })",
+                  "})"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload again (replaces the picture; the previous object is deleted by the outbox worker)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "picture",
+                  "type": "file",
+                  "src": "fixtures/avatar.png",
+                  "contentType": "image/png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "const previousUrl = pm.environment.get('pictureUrl')",
+                  "pm.environment.set('pictureUrl', pm.response.json().pictureUrl)",
+                  "// The object is deleted by the outbox worker once the change is committed (ADR-0016), so poll for it",
+                  "const waitUntilGone = (url, done, attemptsLeft) => pm.sendRequest(url, (error, image) => {",
+                  "  if (error === null && image.code === 404) return done()",
+                  "  if (attemptsLeft === 0) { pm.expect(error === null ? image.code : String(error)).to.eql(404); return done() }",
+                  "  setTimeout(() => waitUntilGone(url, done, attemptsLeft - 1), 500)",
+                  "})",
+                  "pm.test('previous object is deleted', done => waitUntilGone(previousUrl, done, 30))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete picture (clears it; the stored object is deleted by the outbox worker)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/users/picture",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('returns initials', () => pm.expect(pm.response.json().initials).to.eql('L'))",
+                  "// The object is deleted by the outbox worker once the change is committed (ADR-0016), so poll for it",
+                  "const waitUntilGone = (url, done, attemptsLeft) => pm.sendRequest(url, (error, image) => {",
+                  "  if (error === null && image.code === 404) return done()",
+                  "  if (attemptsLeft === 0) { pm.expect(error === null ? image.code : String(error)).to.eql(404); return done() }",
+                  "  setTimeout(() => waitUntilGone(url, done, attemptsLeft - 1), 500)",
+                  "})",
+                  "pm.test('stored object is deleted', done => waitUntilGone(pm.environment.get('pictureUrl'), done, 30))"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Not found and docs",
+      "item": [
+        {
+          "name": "Unknown route",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/this-route-does-not-exist",
+            "header": []
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404))",
+                  "pm.test('error is \"Not found\"', () => pm.expect(pm.response.json().error).to.eql(\"Not found\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown route with POST",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/this-route-does-not-exist",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404))",
+                  "pm.test('error is \"Not found\"', () => pm.expect(pm.response.json().error).to.eql(\"Not found\"))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "The client X-Request-Id is echoed back",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/this-route-does-not-exist",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "postman-request-id"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 404', () => pm.response.to.have.status(404))",
+                  "pm.test('header echoed', () => pm.expect(pm.response.headers.get('X-Request-Id')).to.eql('postman-request-id'))",
+                  "pm.test('body carries it', () => pm.expect(pm.response.json().requestId).to.eql('postman-request-id'))"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Swagger UI (outside production)",
+          "request": {
+            "method": "GET",
+            "url": "{{apiDocsUrl}}",
+            "header": []
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.variables.set('apiDocsUrl', pm.variables.get('baseUrl').replace(/\\/api\\/?$/, '') + '/api-docs/')"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200))",
+                  "pm.test('serves HTML', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html'))"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

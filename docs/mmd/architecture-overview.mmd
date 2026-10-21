@@ -1,0 +1,67 @@
+flowchart TB
+    subgraph Client
+        C[HTTP Client]
+    end
+
+    subgraph Main["main — composition root"]
+        Routes[Routes / Express Router]
+        HttpMw[HTTP middlewares: request id, metrics, helmet, CORS, rate limit, ops auth, error handler]
+        Factories[Factories]
+        Env[Env validation - Zod]
+        Jobs[Background jobs: outbox worker, refresh-token purge]
+    end
+
+    subgraph Application["application — controllers, middlewares, validation"]
+        AuthMw[AuthenticationMiddleware]
+        Controllers[Controllers + DbTransactionController]
+        Validation[Validators]
+        AppContracts[Logger / DbTransaction contracts]
+    end
+
+    subgraph Domain["domain — pure business rules"]
+        UseCases[Use Cases]
+        Entities[Entities]
+        Contracts[Gateway / Repository contracts]
+    end
+
+    subgraph Infra["infra — concrete adapters"]
+        Repos[Postgres Repositories - TypeORM]
+        PgConn[PgConnection - per-request transactions]
+        FbGateway[Facebook API Gateway]
+        S3Gateway[S3 File Storage]
+        JwtGateway[JWT Token Handler]
+        Logger[Winston Logger]
+    end
+
+    subgraph External["external services"]
+        DB[(PostgreSQL)]
+        FB[Facebook Graph API]
+        S3[(S3 bucket — S3Mock locally)]
+    end
+
+    C --> HttpMw --> Routes
+    Routes --> AuthMw
+    Routes --> Controllers
+    Controllers --> Validation
+    Controllers --> UseCases
+    Controllers --> AppContracts
+    Jobs --> UseCases
+    UseCases --> Entities
+    UseCases --> Contracts
+    Contracts -.implemented by.-> Repos
+    Contracts -.implemented by.-> FbGateway
+    Contracts -.implemented by.-> S3Gateway
+    Contracts -.implemented by.-> JwtGateway
+    AppContracts -.implemented by.-> PgConn
+    AppContracts -.implemented by.-> Logger
+    Factories --> Controllers
+    Factories --> UseCases
+    Factories --> Repos
+    Repos --> PgConn --> DB
+    FbGateway --> FB
+    S3Gateway --> S3
+
+    style Domain fill:#e8f4ea,stroke:#2f7a3f
+    style Application fill:#eef2fb,stroke:#3a5bbf
+    style Infra fill:#fbf1e6,stroke:#b5772a
+    style Main fill:#f4eefb,stroke:#7a3fbf

@@ -1,0 +1,396 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  # "Run workflow" on main re-runs the pipeline and deploys, e.g. to recreate the stack after
+  # the Destroy workflow.
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Never cancel a run on main mid-deploy (it could leave a Terraform state lock behind).
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  quality:
+    name: Quality (Lint/Format, Typecheck, Security, Build)
+    runs-on: ubuntu-latest
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint and format check
+        run: npm run lint
+
+      - name: Typecheck (src and tests)
+        run: npm run typecheck
+
+      # Runtime dependencies (what the image ships, `npm ci --omit=dev`) at moderate; the dev
+      # toolchain at critical: its remaining advisories (braces via tsc-alias, sprintf-js via
+      # jest's coverage) have no patched version at all, and none of it reaches production.
+      - name: Run npm audit (runtime dependencies)
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Run npm audit (dev toolchain, critical only)
+        run: npm audit --audit-level=critical
+
+      # Advisory; skipped without the SNYK_TOKEN secret
+      - name: Run Snyk security scan
+        if: env.SNYK_TOKEN != ''
+        uses: snyk/actions/node@v1.0.0
+        continue-on-error: true
+        with:
+          args: --severity-threshold=high
+
+      - name: Build
+        run: npm run build
+
+  verify:
+    name: Verify (Tests, Integration, Docker, API collection)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Includes the E2E route tests
+      - name: Unit and E2E tests with the 100% coverage gate (jest.config.js)
+        run: npm run test:coverage
+        env:
+          NODE_ENV: test
+          JWT_SECRET: test_secret_key_for_ci
+          FB_CLIENT_ID: test_fb_client_id
+          FB_CLIENT_SECRET: test_fb_client_secret
+          S3_ACCESS_KEY_ID: test_aws_access_key
+          S3_SECRET_ACCESS_KEY: test_aws_secret
+          S3_BUCKET: test-bucket
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Start PostgreSQL and S3Mock
+        run: |
+          docker compose up -d --wait postgres s3mock
+          for _ in $(seq 1 30); do curl -sf http://localhost:9090/ > /dev/null && exit 0; sleep 1; done
+          echo "S3Mock did not start"; exit 1
+
+      - name: Run PostgreSQL tests (real database, concurrency and constraints)
+        run: npm run test:pg
+
+      - name: Check entities and migrations are in sync
+        run: npm run migration:check
+        env:
+          DB_DATABASE: authkit_test
+
+      - name: Run S3 adapter tests against S3Mock
+        run: npm run test:s3
+        env:
+          S3_ENDPOINT: http://localhost:9090
+          S3_FORCE_PATH_STYLE: 'true'
+          S3_BUCKET: authkit-pictures
+          S3_ACCESS_KEY_ID: local
+          S3_SECRET_ACCESS_KEY: local
+
+      - name: Build app image and start stack
+        run: docker compose up -d --build app
+        env:
+          # The collection exceeds the default auth limit; the limits are covered by the route tests
+          RATE_LIMIT_PER_MINUTE: '1000'
+          AUTH_RATE_LIMIT_PER_MINUTE: '1000'
+
+      - name: Wait for app health check
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/health > /dev/null; then
+              echo "App is healthy"
+              exit 0
+            fi
+            echo "Waiting for app... ($i)"
+            sleep 2
+          done
+          echo "App did not become healthy in time"
+          exit 1
+
+      - name: Seed fixture data
+        run: docker compose exec -T app npm run db:seed
+
+      - name: Run API collection tests
+        run: npm run test:api
+
+      - name: Production mode refuses to start without real secrets
+        run: |
+          set +e
+          timeout 60 docker run --rm -e NODE_ENV=production authkit-clean-arch:local
+          status=$?
+          set -e
+          if [ "$status" -ne 1 ]; then
+            echo "Expected env validation to exit with status 1, got $status"
+            exit 1
+          fi
+          echo "Fail-fast env validation works"
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose down -v
+
+  infra:
+    name: Terraform fmt + validate (infra, bootstrap)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+      - name: infra
+        working-directory: infra
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false -input=false
+          terraform validate
+      - name: bootstrap
+        working-directory: bootstrap
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false -input=false
+          terraform validate
+
+  # Deploys to real AWS on every push to main (or manual run on main), once every check passes.
+  # Auth is GitHub OIDC -> IAM role (bootstrap/), so no AWS keys are stored in GitHub.
+  # Configuration lives in the `production` GitHub environment (docs/deployment.md); until
+  # AWS_DEPLOY_ROLE_ARN is set there, the job skips the AWS steps and stays green.
+  deploy:
+    name: Deploy to AWS
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    needs: [quality, verify, infra]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_app_image_tag: ${{ github.sha }}
+      # Optional: without them the API runs and only POST /api/login/facebook cannot succeed.
+      TF_VAR_fb_client_id: ${{ secrets.FB_CLIENT_ID || 'not-configured' }}
+      TF_VAR_fb_client_secret: ${{ secrets.FB_CLIENT_SECRET || 'not-configured' }}
+      TF_IN_AUTOMATION: 'true'
+    steps:
+      - name: Check deploy configuration
+        id: config
+        env:
+          ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          if [ -z "$ROLE_ARN" ]; then
+            echo "::notice title=Deploy skipped::AWS_DEPLOY_ROLE_ARN is not set in the production environment. Run scripts/bootstrap.sh (see docs/deployment.md)."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          missing=""
+          [ -z "$AWS_REGION" ] && missing="$missing AWS_REGION"
+          [ -z "$STATE_BUCKET" ] && missing="$missing TF_STATE_BUCKET"
+          if [ -n "$missing" ]; then
+            echo "::error title=Deploy misconfigured::Missing in the production environment:$missing"
+            exit 1
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        if: steps.config.outputs.enabled == 'true'
+      - uses: actions/setup-node@v7
+        if: steps.config.outputs.enabled == 'true'
+        with:
+          node-version: '24'
+
+      - name: Configure AWS credentials (OIDC)
+        if: steps.config.outputs.enabled == 'true'
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: gha-${{ github.run_id }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v4
+        if: steps.config.outputs.enabled == 'true'
+        with:
+          terraform_wrapper: false
+
+      # The S3 backend is only added here, at deploy time, so local runs keep local state.
+      - name: Terraform init (S3 remote state)
+        if: steps.config.outputs.enabled == 'true'
+        working-directory: infra
+        env:
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          cat > ci_backend.tf <<'EOF'
+          terraform {
+            backend "s3" {}
+          }
+          EOF
+          terraform init -input=false \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="key=authkit-clean-arch/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+
+      # The ECS service needs the image to exist, so the registry comes first (a no-op after the
+      # first deploy), then the image is pushed, then the rest of the stack is applied.
+      - name: Terraform apply (ECR repository)
+        if: steps.config.outputs.enabled == 'true'
+        working-directory: infra
+        shell: bash
+        run: terraform apply -input=false -no-color -auto-approve -target=aws_ecr_repository.app 2>&1 | tee ecr.log
+
+      - name: Build and push the app image
+        if: steps.config.outputs.enabled == 'true'
+        run: |
+          REPO=$(terraform -chdir=infra output -raw ecr_repository_url)
+          aws ecr get-login-password | docker login --username AWS --password-stdin "${REPO%%/*}"
+          docker build -t "$REPO:${{ github.sha }}" .
+          docker push "$REPO:${{ github.sha }}"
+
+      - name: Terraform plan
+        if: steps.config.outputs.enabled == 'true'
+        working-directory: infra
+        shell: bash
+        run: terraform plan -input=false -no-color -out=tfplan 2>&1 | tee plan.log
+
+      - name: Terraform apply
+        if: steps.config.outputs.enabled == 'true'
+        working-directory: infra
+        shell: bash
+        run: terraform apply -input=false -no-color tfplan 2>&1 | tee apply.log
+
+      # Surface each Terraform "Error:" block as a run annotation, so failures are readable
+      # from the run summary / checks API without downloading the raw job log.
+      - name: Report Terraform errors
+        if: failure() && steps.config.outputs.enabled == 'true'
+        working-directory: infra
+        run: |
+          for f in ecr.log plan.log apply.log; do
+            [ -f "$f" ] || continue
+            awk '{ gsub(/%/, "%25") }
+                 /^Error: / { if (buf) print buf; buf = $0; n = 0; next }
+                 buf && n < 15 { buf = buf "%0A" $0; n++ }
+                 END { if (buf) print buf }' "$f" |
+              while IFS= read -r block; do echo "::error title=Terraform ($f)::${block}"; done
+          done
+
+      # A parameter group change (static parameters, or a newly attached group) only takes
+      # effect after a reboot, which Terraform does not do. Reboot when RDS reports it pending,
+      # then restart the API so it reconnects (and reruns migrations) against the new settings.
+      - name: Apply pending database parameters
+        if: steps.config.outputs.enabled == 'true'
+        run: |
+          DB=$(terraform -chdir=infra output -raw db_instance)
+          STATUS=$(aws rds describe-db-instances --db-instance-identifier "$DB" \
+            --query 'DBInstances[0].DBParameterGroups[0].ParameterApplyStatus' --output text)
+          echo "Parameter group status: $STATUS"
+          if [ "$STATUS" = "pending-reboot" ]; then
+            aws rds reboot-db-instance --db-instance-identifier "$DB" > /dev/null
+            sleep 30
+            aws rds wait db-instance-available --db-instance-identifier "$DB"
+            aws ecs update-service --force-new-deployment \
+              --cluster "$(terraform -chdir=infra output -raw ecs_cluster)" \
+              --service "$(terraform -chdir=infra output -raw ecs_service)" > /dev/null
+          fi
+
+      - name: Wait for the API service
+        if: steps.config.outputs.enabled == 'true'
+        run: |
+          aws ecs wait services-stable \
+            --cluster "$(terraform -chdir=infra output -raw ecs_cluster)" \
+            --services "$(terraform -chdir=infra output -raw ecs_service)"
+
+      # The fixture user (id=1) the smoke tests act as, seeded from inside the VPC: the database
+      # is not reachable from the runner. Idempotent (scripts/db-seed.js).
+      - name: Seed the fixture user (one-off ECS task)
+        if: steps.config.outputs.enabled == 'true'
+        run: |
+          out() { terraform -chdir=infra output -raw "$1"; }
+          TASK=$(aws ecs run-task --cluster "$(out ecs_cluster)" --task-definition "$(out task_definition)" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$(out task_subnets)],securityGroups=[$(out task_security_group)],assignPublicIp=ENABLED}" \
+            --overrides '{"containerOverrides":[{"name":"app","command":["npm","run","db:seed"]}]}' \
+            --query 'tasks[0].taskArn' --output text)
+          aws ecs wait tasks-stopped --cluster "$(out ecs_cluster)" --tasks "$TASK"
+          CODE=$(aws ecs describe-tasks --cluster "$(out ecs_cluster)" --tasks "$TASK" --query 'tasks[0].containers[0].exitCode' --output text)
+          [ "$CODE" = "0" ] || { echo "::error title=Seed failed::db:seed exited with $CODE (see the /ecs/authkit-app log group)"; exit 1; }
+
+      # Against the live API: health (public and detailed, the latter with the generated
+      # OPS_TOKEN), auth (no token -> 401, a fake Facebook token is rejected), and the full
+      # picture flow for the seeded user with a JWT signed by the deployed JWT_SECRET: upload to
+      # the real bucket, read it back through the returned URL, remove it.
+      - name: Smoke tests (real AWS)
+        if: steps.config.outputs.enabled == 'true'
+        shell: bash
+        run: |
+          API=$(terraform -chdir=infra output -raw api_url)
+          PREFIX=$(terraform -chdir=infra output -raw ssm_prefix)
+          param() { aws ssm get-parameter --with-decryption --name "$PREFIX/$1" --query Parameter.Value --output text; }
+          OPS_TOKEN=$(param OPS_TOKEN); echo "::add-mask::$OPS_TOKEN"
+          JWT_SECRET=$(param JWT_SECRET); echo "::add-mask::$JWT_SECRET"
+          ACCESS_TOKEN=$(JWT_SECRET="$JWT_SECRET" node -e '
+            const { createHmac } = require("crypto");
+            const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+            const now = Math.floor(Date.now() / 1000);
+            const body = b64({ alg: "HS256", typ: "JWT" }) + "." + b64({ sub: "1", iss: "authkit-clean-arch", aud: "authkit-clean-arch-api", iat: now, exp: now + 600 });
+            console.log(body + "." + createHmac("sha256", process.env.JWT_SECRET).update(body).digest("base64url"));
+          ')
+          echo "::add-mask::$ACCESS_TOKEN"
+          expect() { [[ " $3 " == *" $2 "* ]] || { echo "::error title=Smoke test::$1: expected $3, got $2"; cat body.json 2>/dev/null; exit 1; }; echo "$1 -> $2"; }
+          code() { curl -s -o body.json -w '%{http_code}' --retry 3 --retry-delay 5 --retry-all-errors "$@"; }
+
+          expect "GET /api/health" "$(code "$API/api/health")" "200"
+          expect "GET /api/health/detailed (OPS_TOKEN)" "$(code -H "Authorization: Bearer $OPS_TOKEN" "$API/api/health/detailed")" "200"
+          expect "GET /api/health/detailed (no token)" "$(code "$API/api/health/detailed")" "401 404"
+          expect "PUT /api/users/picture (no token)" "$(code -X PUT "$API/api/users/picture")" "401"
+          expect "POST /api/login/facebook (fake token)" "$(code -X POST "$API/api/login/facebook" -H 'Content-Type: application/json' -d '{"token":"not-a-facebook-token"}')" "401 502"
+
+          expect "PUT /api/users/picture" "$(code -X PUT "$API/api/users/picture" -H "Authorization: Bearer $ACCESS_TOKEN" -F "picture=@docs/api/fixtures/avatar.jpg;type=image/jpeg")" "200"
+          PICTURE_URL=$(jq -r .pictureUrl body.json)
+          expect "GET pictureUrl (pre-signed S3)" "$(curl -s -o /dev/null -w '%{http_code}' "$PICTURE_URL")" "200"
+          expect "DELETE /api/users/picture" "$(code -X DELETE "$API/api/users/picture" -H "Authorization: Bearer $ACCESS_TOKEN")" "200"
+
+          {
+            echo "### Deployed :rocket:"
+            echo "API: ${API}/api"
+            echo
+            echo "Swagger UI: ${API}/api-docs"
+          } >> "$GITHUB_STEP_SUMMARY"

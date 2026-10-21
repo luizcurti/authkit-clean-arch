@@ -1,0 +1,50 @@
+sequenceDiagram
+    actor Client
+    participant Limiter as authRateLimiter
+    participant Route as POST /api/login/facebook
+    participant Controller as FacebookLoginController
+    participant UseCase as FacebookAuthentication
+    participant FbGateway as FacebookApi Gateway
+    participant Repo as PgUserAccountRepository
+    participant RtRepo as PgRefreshTokenRepository
+    participant Jwt as JwtTokenHandler
+    participant Hasher as CryptoHasher
+
+    Client->>Limiter: POST { token }
+    alt too many requests
+        Limiter-->>Client: 429 Too Many Requests
+    else within limit
+        Limiter->>Route: forward
+        Route->>Controller: handle(request)
+        Controller->>Controller: validate(token required, a string)
+        alt token missing or not a string
+            Controller-->>Client: 400 Validation Error
+        else token present
+            Controller->>UseCase: execute({ token })
+            UseCase->>FbGateway: loadUser({ token })
+            note right of FbGateway: debug_token with the app access token,<br/>rejected unless is_valid is true<br/>and app_id equals FB_CLIENT_ID
+            FbGateway-->>UseCase: FacebookAccount | undefined | throws ExternalServiceError
+            alt Facebook unavailable (5xx/network, after retries)
+                UseCase-->>Controller: rethrows ExternalServiceError
+                Controller-->>Client: 502 Bad Gateway
+            else invalid Facebook token, issued for another app, or no email
+                UseCase-->>Controller: throws AuthenticationError
+                Controller-->>Client: 401 Unauthorized
+            else valid Facebook token
+                UseCase->>Repo: load({ facebookId, email })
+                note right of Repo: by facebook_id first,<br/>email only to link an unbound account
+                alt account bound to another Facebook id
+                    UseCase-->>Controller: throws AuthenticationError
+                    Controller-->>Client: 401 Unauthorized
+                end
+                UseCase->>Repo: saveWithFacebook (upsert, ON CONFLICT email)
+                Repo-->>UseCase: user id
+                UseCase->>Jwt: generate({ key: userId, 15m })
+                Jwt-->>UseCase: accessToken
+                UseCase->>Hasher: hash(refreshToken)
+                UseCase->>RtRepo: saveRefreshToken({ userId, tokenHash, familyId, 7d })
+                UseCase-->>Controller: { accessToken, refreshToken }
+                Controller-->>Client: 200 { accessToken, refreshToken }
+            end
+        end
+    end
