@@ -30,6 +30,12 @@ describe('AwsS3FileStorage', () => {
       })
     })
 
+    it('should use the default credential chain (e.g. an ECS task role) when no keys are configured', () => {
+      new AwsS3FileStorage({ bucket: 'any_bucket', region: 'any_region' })
+
+      expect(S3Client).toHaveBeenLastCalledWith({ region: 'any_region' })
+    })
+
     it('should target an S3-compatible endpoint with path-style addressing when configured', () => {
       new AwsS3FileStorage({ ...config, endpoint: 'http://s3mock:9090', forcePathStyle: true })
 

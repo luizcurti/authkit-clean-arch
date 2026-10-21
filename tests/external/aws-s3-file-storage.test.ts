@@ -3,7 +3,8 @@ import { AwsS3FileStorage } from '@/infra/gateways'
 
 // Runs against S3Mock (S3_ENDPOINT) or real AWS credentials; skipped with neither
 const PLACEHOLDER_ACCESS_KEYS = ['test_s3_access_key', 'your_aws_access_key_id']
-const isConfigured = env.s3.endpoint !== undefined || !PLACEHOLDER_ACCESS_KEYS.includes(env.s3.accessKey)
+const isConfigured = env.s3.endpoint !== undefined ||
+  (env.s3.accessKey !== undefined && !PLACEHOLDER_ACCESS_KEYS.includes(env.s3.accessKey))
 const itIfConfigured = isConfigured ? it : it.skip
 
 describe('AwsS3FileStorage against S3', () => {

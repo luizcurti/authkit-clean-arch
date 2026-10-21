@@ -62,7 +62,7 @@ Every variable is validated at startup ([`src/main/config/env.ts`](src/main/conf
 |----------|---------|
 | `FB_CLIENT_ID`, `FB_CLIENT_SECRET` | Facebook app credentials |
 | `JWT_SECRET` | HS256 signing key, at least 32 characters |
-| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET` | Picture storage |
+| `S3_BUCKET` | Picture storage. `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` are optional: unset, the AWS SDK's default credential chain is used (an ECS task role, for example) |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_DATABASE` | PostgreSQL (defaults target the local container) |
 
 The optional ones (CORS, `OPS_TOKEN`, rate limits, job intervals, CDN URL, log level) are listed in [operations](docs/operations.md#configuration) and [`.env.example`](.env.example).
@@ -117,6 +117,8 @@ GitHub Actions ([`ci.yml`](.github/workflows/ci.yml)) runs on pushes and pull re
 
 - **quality:** lint and format check, typecheck, `npm audit`, build (Snyk advisory, when its token is set).
 - **verify:** unit and E2E tests with the coverage gate, PostgreSQL and S3Mock integration tests, migration drift check, Docker image build, the Compose stack with the Postman collection run against it, and a check that the image refuses to start in production without secrets.
+- **infra:** `terraform fmt`/`validate` of [`infra/`](infra) and [`bootstrap/`](bootstrap).
+- **deploy** (pushes to `main`, once configured): deploys to AWS (CloudFront, ECS Fargate, RDS PostgreSQL, S3) and smoke-tests the live API — see [deployment](docs/deployment.md). [`destroy.yml`](.github/workflows/destroy.yml) tears it down on demand.
 
 ## Architectural decisions
 

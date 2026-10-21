@@ -196,8 +196,6 @@ describe('env', () => {
     it.each([
       ['FB_CLIENT_ID', 'FB_CLIENT_ID is required in production'],
       ['FB_CLIENT_SECRET', 'FB_CLIENT_SECRET is required in production'],
-      ['S3_ACCESS_KEY_ID', 'S3_ACCESS_KEY_ID is required in production'],
-      ['S3_SECRET_ACCESS_KEY', 'S3_SECRET_ACCESS_KEY is required in production'],
       ['S3_BUCKET', 'S3_BUCKET is required in production']
     ])('should exit with 1 when %s is empty', (key, message) => {
       const printed = loadExpectingExit({ ...productionSecrets, [key]: '' })
@@ -212,6 +210,22 @@ describe('env', () => {
       const printed = loadExpectingExit(vars)
 
       expect(printed.some(line => line.startsWith(`  ${key}:`))).toBe(true)
+    })
+
+    it('should load without S3 keys, leaving the AWS default credential chain (e.g. an ECS task role) to the SDK', () => {
+      const env = load({ ...productionSecrets, S3_ACCESS_KEY_ID: '', S3_SECRET_ACCESS_KEY: '' })
+
+      expect(env.s3.accessKey).toBeUndefined()
+      expect(env.s3.secret).toBeUndefined()
+    })
+
+    it.each(['S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'])('should exit with 1 when only %s of the S3 key pair is missing', (key) => {
+      const vars: Record<string, string> = { ...productionSecrets }
+      delete vars[key]
+
+      const printed = loadExpectingExit(vars)
+
+      expect(printed).toContain('  S3_ACCESS_KEY_ID: S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together')
     })
 
     it('should exit with 1 when JWT_SECRET is shorter than 32 characters', () => {

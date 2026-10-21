@@ -4,7 +4,7 @@
 
 `src/main/config/env.ts` validates every variable with Zod at startup. Outside production, missing variables fall back to development defaults; in production, required ones must be set. Any invalid value, in any environment, stops the app with exit status 1 and a list of the offending variables. `.env.example` is the annotated reference. `.env` is gitignored.
 
-**Required in production:** `FB_CLIENT_ID`, `FB_CLIENT_SECRET`, `JWT_SECRET` (at least 32 characters), `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, and the `DB_*` connection settings.
+**Required in production:** `FB_CLIENT_ID`, `FB_CLIENT_SECRET`, `JWT_SECRET` (at least 32 characters), `S3_BUCKET`, and the `DB_*` connection settings. `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` go together or not at all: unset, the AWS SDK's default credential chain is used (an ECS task role or instance profile, for example).
 
 **Optional:**
 
@@ -52,7 +52,7 @@ npm start
 
 ## Deployment
 
-The project ships as one container image. It needs a PostgreSQL database and an S3 bucket, and it provisions no cloud infrastructure itself (no Terraform). In production, set:
+The project ships as one container image. It needs a PostgreSQL database and an S3 bucket. [`infra/`](../infra) provisions them on AWS (CloudFront, ECS Fargate, RDS, S3) from the CI `deploy` job — see [deployment](deployment.md). Elsewhere, in production, set:
 - the required secrets;
 - `S3_PUBLIC_BASE_URL` to a CloudFront distribution in front of the private bucket;
 - `OPS_TOKEN`;
